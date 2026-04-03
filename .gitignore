@@ -2,4 +2,5 @@ build
 __pycache__
 .vscode
 src/model_weights.h
-simple_model.onnx
+simple_linear_model.onnx
+simple_conv1d_model.onnx

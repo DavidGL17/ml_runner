@@ -1,7 +1,7 @@
 from c_exporter.onnx_exporter import export_onnx
 
 # Load the ONNX model
-model_path = "simple_model.onnx"
+model_path = "simple_conv1d_model.onnx"
 output_path = "src/model_weights.h"
 
 export_onnx(model_path, output_path)

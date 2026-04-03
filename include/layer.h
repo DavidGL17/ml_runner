@@ -5,8 +5,8 @@
  * @brief Enum that represents different types of layers used in neural networks.
  */
 typedef enum LayerTypes {
-   Conv = 0, /**< Represents a convolutional layer */
-   Dense = 1 /**< Represents a dense (fully connected) layer */
+   Dense = 0,  /**< Represents a dense (fully connected) layer */
+   Conv1D = 1, /**< Represents a convolutional 1D layer */
 } LayerTypes;
 
 #endif // LAYER_H
