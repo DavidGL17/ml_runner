@@ -2,7 +2,6 @@ MODEL_TEMPLATE_INIT = """#ifndef MODEL_WEIGHTS_H
 #define MODEL_WEIGHTS_H
 
 #include "layers/dense.h"
-#include "layers/conv.h"
 #include "model.h"
 """
 

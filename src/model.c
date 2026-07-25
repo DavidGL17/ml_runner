@@ -1,6 +1,5 @@
 #include "model.h"
 #include "layer.h"
-#include "layers/conv.h"
 #include "layers/dense.h"
 #include <stdlib.h>
 #include <string.h>
@@ -23,10 +22,6 @@ void model_forward(Model *model) {
       case Dense:
          temporary_output = malloc(sizeof(float) * (*(DenseLayer *)(*model).layers[i]).output_size);
          forward_dense((DenseLayer *)(*model).layers[i], temporary_input, temporary_output);
-         break;
-      case Conv1D:
-         temporary_output = NULL;
-         // forward_conv(&(*model).layers[i].layer.conv);
          break;
       default:
          break;

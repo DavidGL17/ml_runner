@@ -1,7 +1,7 @@
 import onnx
 from onnx import numpy_helper
 from .model import export_model
-from .layer import LayerParser, LinearLayerParser, ConvLayerParser
+from .layer import LayerParser, LinearLayerParser
 
 
 def _get_attribute(node, name, default=None):
@@ -46,25 +46,7 @@ def export_onnx(model_path: str, output_path: str) -> None:
         weight_matrix = node_weights[0] if len(node_weights) > 0 else None
         bias_vector = node_weights[1] if len(node_weights) > 1 else None
 
-        if node.op_type == "Conv":
-            # ONNX Conv: weight shape = (out_c, in_c, k)
-            in_c = weight_matrix.shape[1]
-            out_c = weight_matrix.shape[0]
-            k = weight_matrix.shape[2]
-            stride = _get_attribute(node, "strides", [1])[0]
-            padding = _get_attribute(node, "pads", [0])[0]
-
-            layer = ConvLayerParser(
-                layer_num=i,
-                input_channels=in_c,
-                output_channels=out_c,
-                kernel_size=k,
-                stride=stride,
-                padding=padding,
-                weights=weight_matrix.flatten().tolist(),
-                bias=bias_vector.flatten().tolist() if bias_vector is not None else [0.0] * out_c,
-            )
-        elif node.op_type == "Gemm":
+        if node.op_type == "Gemm":
             # Default to linear layer for Gemm/MatMul etc.
             input_size = weight_matrix.shape[1] if weight_matrix is not None else None
             output_size = weight_matrix.shape[0] if weight_matrix is not None else None

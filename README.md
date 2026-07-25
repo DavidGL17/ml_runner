@@ -6,5 +6,4 @@ A small lib that aims to provide a fast and device agnostic way of running pytho
 ## TODO
 
 - Add activation functions
-- Create python export script (from onnx)
-- Implement conv2D layer
+- Add testing framework
