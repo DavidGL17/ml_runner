@@ -18,13 +18,16 @@ impl DenseLayer {
 
         let mut output = vec![0.0; self.output_size];
 
-        for i in 0..self.output_size {
-            let mut sum = 0.0;
-            for j in 0..self.input_size {
-                sum += input[j] * self.weights[i * self.input_size + j];
-            }
-            output[i] = sum + self.bias[i];
-        }
+        // Which implementation this call resolves to (scalar, SIMD, ...) is
+        // decided at compile time by Cargo features - see src/backend/mod.rs.
+        crate::dense::dense_forward(
+            input,
+            &self.weights,
+            &self.bias,
+            self.input_size,
+            self.output_size,
+            &mut output,
+        );
 
         output
     }

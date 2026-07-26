@@ -1,3 +1,4 @@
+mod dense;
 mod layers;
 mod model;
 

@@ -6,3 +6,16 @@ edition = "2024"
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0"
+wide = { version = "0.7", optional = true }
+
+[features]
+# Default backend if nothing is specified: portable scalar code, works everywhere
+# including no_std-friendly microcontrollers (once the crate is adapted for no_std).
+default = ["scalar"]
+
+# Plain, dependency-free loops. Always compiled in as the fallback path.
+scalar = []
+
+# SIMD-accelerated backend using the `wide` crate (portable SIMD, works on
+# stable Rust). Enable with: cargo build --features simd
+simd = ["dep:wide"]
