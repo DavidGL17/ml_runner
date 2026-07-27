@@ -6,3 +6,4 @@ simple_linear_model.onnx
 simple_conv1d_model.onnx
 target
 Cargo.lock
+export.json

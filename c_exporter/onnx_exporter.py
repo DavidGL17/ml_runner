@@ -1,3 +1,5 @@
+import json
+
 import onnx
 from onnx import numpy_helper
 from .model import export_model
@@ -54,8 +56,8 @@ def export_onnx(model_path: str, output_path: str) -> None:
                 layer_num=i,
                 input_size=input_size,
                 output_size=output_size,
-                weights=weight_matrix.T.tolist() if weight_matrix is not None else [],
-                bias=bias_vector.T.tolist() if bias_vector is not None else [],
+                weights=weight_matrix.tolist() if weight_matrix is not None else [],
+                bias=bias_vector.tolist() if bias_vector is not None else [],
             )
         else:
             raise ValueError(f"Unsupported layer type: {node.op_type}")
@@ -65,4 +67,4 @@ def export_onnx(model_path: str, output_path: str) -> None:
     model_export = export_model(layers, in_shape, out_shape)
 
     with open(output_path, "w") as f:
-        f.write(model_export)
+        json.dump(model_export, f, indent=2)

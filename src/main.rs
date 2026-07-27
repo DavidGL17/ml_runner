@@ -3,38 +3,27 @@ mod layers;
 mod model;
 
 use crate::model::Model;
+use std::env;
+use std::fs;
 
 fn main() {
-    // Example JSON representation of a simple model:
-    // Input (2) -> Dense (2x2) -> Output (1)
-    // Weights: [[0.5, 0.2], [0.1, 0.8]], Bias: [0.1, -0.2]
-    // Then Dense (2x1) -> Output (1)
-    // Weights: [[0.7, 0.3]], Bias: [0.5]
-    let model_json = r#"
-    {
-        "input_size": 2,
-        "output_size": 1,
-        "layers": [
-            {
-                "type": "dense",
-                "input_size": 2,
-                "output_size": 2,
-                "weights": [0.5, 0.2, 0.1, 0.8],
-                "bias": [0.1, -0.2]
-            },
-            {
-                "type": "dense",
-                "input_size": 2,
-                "output_size": 1,
-                "weights": [0.7, 0.3],
-                "bias": [0.5]
-            }
-        ]
-    }
-    "#;
+    // Path to the exported model JSON. Defaults to "export.json" in the
+    // current directory, or pass a path as the first CLI argument:
+    //   cargo run -- path/to/export.json
+    let path = env::args()
+        .nth(1)
+        .unwrap_or_else(|| "export.json".to_string());
+
+    let model_json = match fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(e) => {
+            eprintln!("Error reading model file '{}': {}", path, e);
+            return;
+        }
+    };
 
     // Load the model
-    let model = match Model::from_json(model_json) {
+    let model = match Model::from_json(&model_json) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("Error parsing model JSON: {}", e);
@@ -42,12 +31,12 @@ fn main() {
         }
     };
 
-    println!("Model loaded successfully!");
+    println!("Model loaded successfully from '{}'!", path);
     println!("Input size: {}", model.input_size);
     println!("Output size: {}", model.output_size);
 
     // Test input
-    let input = vec![1.0, 2.0];
+    let input = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
     println!("Input: {:?}", input);
 
     // Run forward pass
