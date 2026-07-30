@@ -19,3 +19,6 @@ scalar = []
 # SIMD-accelerated backend using the `wide` crate (portable SIMD, works on
 # stable Rust). Enable with: cargo build --features simd
 simd = ["dep:wide"]
+
+[dev-dependencies]
+approx = "0.5.1"

@@ -14,7 +14,7 @@ fn main() {
         .nth(1)
         .unwrap_or_else(|| "export.json".to_string());
 
-    let model_json = match fs::read_to_string(&path) {
+    let model_json: String = match fs::read_to_string(&path) {
         Ok(contents) => contents,
         Err(e) => {
             eprintln!("Error reading model file '{}': {}", path, e);

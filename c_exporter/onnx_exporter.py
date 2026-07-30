@@ -1,5 +1,3 @@
-import json
-
 import onnx
 from onnx import numpy_helper
 from .model import export_model
@@ -20,7 +18,7 @@ def _get_attribute(node, name, default=None):
     return default
 
 
-def export_onnx(model_path: str, output_path: str) -> None:
+def export_onnx(model_path: str) -> dict:
     model = onnx.load(model_path)
 
     onnx.checker.check_model(model)
@@ -64,7 +62,4 @@ def export_onnx(model_path: str, output_path: str) -> None:
 
         layers.append(layer)
 
-    model_export = export_model(layers, in_shape, out_shape)
-
-    with open(output_path, "w") as f:
-        json.dump(model_export, f, indent=2)
+    return export_model(layers, in_shape, out_shape)
