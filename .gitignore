@@ -4,6 +4,7 @@ __pycache__
 src/model_weights.h
 simple_linear_model.onnx
 simple_conv1d_model.onnx
+temporary_model.onnx
 target
 Cargo.lock
 export.json
