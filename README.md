@@ -1,6 +1,6 @@
 # ML_RUNNER
 
-A small library that aims to provide a fast and device agnostic way of running python ML models in embedded platforms
+A small library that aims to provide a fast and device agnostic way of running python ML models in embedded platforms using rust
 
 
 ## Features
