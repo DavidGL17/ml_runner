@@ -17,7 +17,13 @@ A small library that aims to provide a fast and device agnostic way of running p
 
 ### Supported activation functions
 
-None for now
+| function | simple application | simd  |
+| :------: | :----------------: | :---: |
+|   ReLU   |        yes         |  no   |
+| Sigmoid  |        yes         |  no   |
+|   Tanh   |        yes         |  no   |
+| Softmax  |        yes         |  no   |
+|  Linear  |        yes         |  no   |
 
 ## Usage
 
