@@ -38,7 +38,7 @@ python main.py --model-path simple_linear_model.onnx --output-path export.json
 or from your own code
 
 ```python
-from c_exporter.onnx_exporter import export_onnx
+from ml_runner_exporter.onnx_exporter import export_onnx
 
 output_model = export_onnx(model_path)
 ```
