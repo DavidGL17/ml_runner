@@ -1,3 +1,4 @@
+use crate::activation;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -19,7 +20,7 @@ impl DenseLayer {
         let mut output = vec![0.0; self.output_size];
 
         // Which implementation this call resolves to (scalar, SIMD, ...) is
-        // decided at compile time by Cargo features - see src/backend/mod.rs.
+        // decided at compile time by Cargo features - see src/dense/mod.rs.
         crate::dense::dense_forward(
             input,
             &self.weights,
@@ -29,6 +30,26 @@ impl DenseLayer {
             &mut output,
         );
 
+        output.to_vec()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ActivationLayer {
+    pub activation_type: activation::ActivationType,
+    pub input_size: usize,
+}
+
+impl ActivationLayer {
+    pub fn forward(&self, input: &[f32]) -> Vec<f32> {
+        assert_eq!(
+            input.len(),
+            self.input_size,
+            "Input size mismatch in ActivationLayer"
+        );
+
+        let mut output = input.to_vec();
+        self.activation_type.apply_slice(&mut output);
         output
     }
 }
@@ -38,12 +59,15 @@ impl DenseLayer {
 pub enum Layer {
     #[serde(rename = "dense")]
     Dense(DenseLayer),
+    #[serde(rename = "activation")]
+    Activation(ActivationLayer),
 }
 
 impl Layer {
     pub fn forward(&self, input: &[f32]) -> Vec<f32> {
         match self {
             Layer::Dense(layer) => layer.forward(input),
+            Layer::Activation(layer) => layer.forward(input),
         }
     }
 }
@@ -91,5 +115,29 @@ mod tests {
         let output = layer.forward(&input);
         // (0.5 * 2.0) + 1.0 = 2.0
         assert_eq!(output, vec![2.0]);
+    }
+
+    #[test]
+    fn test_activation_layer_forward() {
+        let layer = ActivationLayer {
+            activation_type: activation::ActivationType::ReLU,
+            input_size: 3,
+        };
+        let input = vec![-1.0, 0.0, 1.0];
+        let output = layer.forward(&input);
+        // ReLU: [-1.0, 0.0, 1.0] -> [0.0, 0.0, 1.0]
+        assert_eq!(output, vec![0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn test_activation_layer_enum_dispatch() {
+        let layer = Layer::Activation(ActivationLayer {
+            activation_type: activation::ActivationType::Sigmoid,
+            input_size: 1,
+        });
+        let input = vec![0.0];
+        let output = layer.forward(&input);
+        // Sigmoid(0) = 0.5
+        assert_eq!(output, vec![0.5]);
     }
 }

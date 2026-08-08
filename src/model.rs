@@ -92,6 +92,44 @@ mod tests {
     }
 
     #[test]
+    fn test_model_forward_with_activation() {
+        let json = r#"
+        {
+            "input_size": 2,
+            "output_size": 1,
+            "layers": [
+                {
+                    "type": "dense",
+                    "input_size": 2,
+                    "output_size": 2,
+                    "weights": [0.5, 0.5, 0.5, 0.5],
+                    "bias": [0.0, 0.0]
+                },
+                {
+                    "type": "activation",
+                    "activation_type": "relu",
+                    "input_size": 2
+                },
+                {
+                    "type": "dense",
+                    "input_size": 2,
+                    "output_size": 1,
+                    "weights": [1.0, 1.0],
+                    "bias": [0.5]
+                }
+            ]
+        }
+        "#;
+        let model = Model::from_json(json).unwrap();
+        let input = vec![1.0, 1.0];
+        let output = model.forward(&input).unwrap();
+        // Layer 1: [0.5*1 + 0.5*1, 0.5*1 + 0.5*1] = [1.0, 1.0]
+        // Layer 2 (ReLU): [1.0, 1.0] (no change since values are positive)
+        // Layer 3: [1.0*1 + 1.0*1 + 0.5] = [2.5]
+        assert_eq!(output, vec![2.5]);
+    }
+
+    #[test]
     #[should_panic(expected = "Model input size mismatch")]
     fn test_model_wrong_input_size() {
         let json = r#"
