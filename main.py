@@ -1,7 +1,7 @@
 import json
 import argparse
 
-from c_exporter.onnx_exporter import export_onnx
+from ml_runner_exporter.onnx_exporter import export_onnx
 
 # Set up argument parsing
 parser = argparse.ArgumentParser(description="Export ONNX model to JSON")
