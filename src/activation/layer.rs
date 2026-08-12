@@ -65,6 +65,26 @@ impl ActivationType {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ActivationLayer {
+    pub activation_type: ActivationType,
+    pub input_size: usize,
+}
+
+impl ActivationLayer {
+    pub fn forward(&self, input: &[f32]) -> Vec<f32> {
+        assert_eq!(
+            input.len(),
+            self.input_size,
+            "Input size mismatch in ActivationLayer"
+        );
+
+        let mut output = input.to_vec();
+        self.activation_type.apply_slice(&mut output);
+        output
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,5 +158,17 @@ mod tests {
     #[should_panic]
     fn test_softmax_apply_single_panics() {
         ActivationType::Softmax.apply(1.0);
+    }
+
+    #[test]
+    fn test_activation_layer_forward() {
+        let layer = ActivationLayer {
+            activation_type: ActivationType::ReLU,
+            input_size: 3,
+        };
+        let input = vec![-1.0, 0.0, 1.0];
+        let output = layer.forward(&input);
+        // ReLU: [-1.0, 0.0, 1.0] -> [0.0, 0.0, 1.0]
+        assert_eq!(output, vec![0.0, 0.0, 1.0]);
     }
 }

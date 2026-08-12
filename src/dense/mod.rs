@@ -1,4 +1,5 @@
-//! Pluggable compute backends for layer math.
+//! Pluggable compute backends for layer math, plus the `DenseLayer` type
+//! that uses them.
 //!
 //! Which backend is compiled into the binary is decided entirely at build
 //! time via Cargo features (see `Cargo.toml`). There is no runtime
@@ -20,6 +21,10 @@ pub mod scalar;
 
 #[cfg(feature = "simd")]
 pub mod simd;
+
+mod layer;
+
+pub use layer::DenseLayer;
 
 // --- Compile-time backend selection -----------------------------------
 //
