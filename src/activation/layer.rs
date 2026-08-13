@@ -3,6 +3,7 @@
 //! This module provides various activation functions that can be applied to
 //! layer outputs to introduce non-linearity into the model.
 
+use crate::tensor::{Tensor, TensorShape};
 use serde::{Deserialize, Serialize};
 
 /// Available activation functions.
@@ -72,16 +73,29 @@ pub struct ActivationLayer {
 }
 
 impl ActivationLayer {
-    pub fn forward(&self, input: &[f32]) -> Vec<f32> {
+    /// The shape this layer expects to receive.
+    pub fn input_shape(&self) -> TensorShape {
+        TensorShape::Flat(self.input_size)
+    }
+
+    /// Activations are element-wise (or, for softmax, shape-preserving),
+    /// so output shape always matches input shape.
+    pub fn output_shape(&self) -> TensorShape {
+        self.input_shape()
+    }
+
+    pub fn forward(&self, input: &Tensor) -> Tensor {
         assert_eq!(
-            input.len(),
-            self.input_size,
-            "Input size mismatch in ActivationLayer"
+            input.shape,
+            self.input_shape(),
+            "Shape mismatch in ActivationLayer: expected {:?}, got {:?}",
+            self.input_shape(),
+            input.shape
         );
 
-        let mut output = input.to_vec();
-        self.activation_type.apply_slice(&mut output);
-        output
+        let mut data = input.data.clone();
+        self.activation_type.apply_slice(&mut data);
+        Tensor::new(data, self.output_shape())
     }
 }
 
@@ -166,9 +180,20 @@ mod tests {
             activation_type: ActivationType::ReLU,
             input_size: 3,
         };
-        let input = vec![-1.0, 0.0, 1.0];
+        let input = Tensor::flat(vec![-1.0, 0.0, 1.0]);
         let output = layer.forward(&input);
         // ReLU: [-1.0, 0.0, 1.0] -> [0.0, 0.0, 1.0]
-        assert_eq!(output, vec![0.0, 0.0, 1.0]);
+        assert_eq!(output.data, vec![0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Shape mismatch in ActivationLayer")]
+    fn test_activation_layer_wrong_shape() {
+        let layer = ActivationLayer {
+            activation_type: ActivationType::ReLU,
+            input_size: 3,
+        };
+        let input = Tensor::flat(vec![-1.0, 0.0]);
+        let _ = layer.forward(&input);
     }
 }

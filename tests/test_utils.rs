@@ -1,12 +1,13 @@
 use approx::AbsDiffEq;
 use core::panic;
+use ml_runner::tensor::Tensor;
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
 
 pub struct FixtureModelInput {
     pub model_json: String,
-    pub test_input: Vec<f32>,
+    pub test_input: Tensor,
     pub test_output: Vec<f32>,
 }
 
@@ -27,7 +28,7 @@ impl FixtureModelInput {
         let model_json = json_value["model"].to_string();
 
         // Extract test_input and test_output
-        let test_input = json_value["test_input"]
+        let test_input: Vec<f32> = json_value["test_input"]
             .as_array()
             .unwrap()
             .iter()
@@ -43,7 +44,11 @@ impl FixtureModelInput {
 
         FixtureModelInput {
             model_json,
-            test_input,
+            // Fixtures only ever describe flat vector inputs today, so
+            // Tensor::flat is the right constructor here. If a fixture
+            // ever needs to describe a CHW input (e.g. for a conv model),
+            // this will need to read a "test_input_shape" field instead.
+            test_input: Tensor::flat(test_input),
             test_output,
         }
     }
