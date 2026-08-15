@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ndarray = "0.17.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0"
 wide = { version = "0.7", optional = true }

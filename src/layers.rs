@@ -75,4 +75,38 @@ mod tests {
         // Sigmoid(0) = 0.5
         assert_eq!(output.data, vec![0.5]);
     }
+
+    #[test]
+    fn test_conv2d_layer_enum_dispatch() {
+        let layer = Layer::Conv2D(Conv2DLayer {
+            kernel_size: 2,
+            stride: 1,
+            padding: 0,
+            input_channels: 1,
+            output_channels: 1,
+            height: 2,
+            width: 2,
+            weights: vec![1.0; 4],
+            bias: vec![1.0],
+        });
+
+        #[rustfmt::skip]
+        let input = Tensor::new(
+            vec![1.0, 2.0, 3.0, 4.0],
+            layer.input_shape(),
+        );
+
+        let output = layer.forward(&input);
+
+        assert_eq!(
+            output.shape,
+            TensorShape::CHW {
+                channels: 1,
+                height: 1,
+                width: 1,
+            }
+        );
+        // (1+2+3+4) + bias(1.0) = 11.0
+        assert_eq!(output.data, vec![11.0]);
+    }
 }
