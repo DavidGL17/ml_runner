@@ -37,6 +37,78 @@ class LinearLayerParser(LayerParser):
         }
 
 
+class Conv2DLayerParser(LayerParser):
+
+    def __init__(
+        self,
+        layer_num: int,
+        kernel_size: int,
+        stride: int,
+        padding: int,
+        input_channels: int,
+        output_channels: int,
+        height: int,
+        width: int,
+        weights: list,
+        bias: list,
+    ):
+        super().__init__("conv2d", layer_num)
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.input_channels = input_channels
+        self.output_channels = output_channels
+        self.height = height
+        self.width = width
+        # Expected shape: weights is (output_channels, input_channels, kernel_size, kernel_size),
+        # matching ONNX's Conv weight tensor layout directly.
+        self.weights = weights
+        self.bias = bias
+
+    def to_dict(self) -> dict:
+        # Flatten (output_channels, input_channels, kernel_size, kernel_size) in row-major
+        # order, matching the indexing Conv2DLayer::weight_idx uses on the Rust side:
+        # ((oc * input_channels + ic) * kernel_size + kh) * kernel_size + kw
+        flat_weights = [float(w) for oc in self.weights for ic in oc for row in ic for w in row]
+        flat_bias = [float(b) for b in self.bias]
+
+        return {
+            "type": self.layer_type,
+            "kernel_size": self.kernel_size,
+            "stride": self.stride,
+            "padding": self.padding,
+            "input_channels": self.input_channels,
+            "output_channels": self.output_channels,
+            "height": self.height,
+            "width": self.width,
+            "weights": flat_weights,
+            "bias": flat_bias,
+        }
+
+
+class FlattenLayerParser(LayerParser):
+
+    def __init__(self, layer_num: int, channels: int, height: int, width: int):
+        super().__init__("flatten", layer_num)
+        self.channels = channels
+        self.height = height
+        self.width = width
+
+    def to_dict(self) -> dict:
+        return {
+            "type": self.layer_type,
+            # Matches TensorShape's default (externally-tagged) serde representation:
+            # the CHW variant serializes as {"CHW": {"channels": .., "height": .., "width": ..}}
+            "shape": {
+                "CHW": {
+                    "channels": self.channels,
+                    "height": self.height,
+                    "width": self.width,
+                }
+            },
+        }
+
+
 class ActivationTypes(Enum):
     ReLU = 1
     Sigmoid = 2
@@ -70,14 +142,14 @@ class ActivationTypes(Enum):
 
 
 class ActivationLayerParser(LayerParser):
-    def __init__(self, layer_num: int, activation_type: ActivationTypes, input_size: int):
+    def __init__(self, layer_num: int, activation_type: ActivationTypes, shape: dict):
         super().__init__("activation", layer_num)
         self.activation_type = activation_type
-        self.input_size = input_size
+        self.shape = shape
 
     def to_dict(self) -> dict:
         return {
             "type": self.layer_type,
             "activation_type": self.activation_type.to_rust_id(),
-            "input_size": self.input_size,
+            "shape": self.shape,
         }

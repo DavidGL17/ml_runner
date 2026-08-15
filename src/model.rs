@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Model {
-    pub input_size: usize,
-    pub output_size: usize,
+    pub input_shape: TensorShape,
+    pub output_shape: TensorShape,
     pub layers: Vec<Layer>,
 }
 
@@ -18,10 +18,11 @@ impl Model {
     /// shape matches the next layer's declared input shape. This only
     /// looks at declared shapes, not real data, so it's cheap enough to
     /// run right after loading a model - catching a misconfigured model
-    /// (e.g. a dense layer wired to the wrong size) before any forward
-    /// pass runs.
+    /// (e.g. a dense layer wired to the wrong size, or a conv layer feeding
+    /// straight into a dense layer without a Flatten in between) before any
+    /// forward pass runs.
     pub fn validate_shapes(&self) -> Result<(), String> {
-        let mut expected = TensorShape::Flat(self.input_size);
+        let mut expected = self.input_shape.clone();
 
         for (i, layer) in self.layers.iter().enumerate() {
             if layer.input_shape() != expected {
@@ -35,11 +36,10 @@ impl Model {
             expected = layer.output_shape();
         }
 
-        let declared_output = TensorShape::Flat(self.output_size);
-        if expected != declared_output {
+        if expected != self.output_shape {
             return Err(format!(
                 "Model output shape mismatch: layers produce {:?}, model declares {:?}",
-                expected, declared_output
+                expected, self.output_shape
             ));
         }
 
@@ -47,11 +47,7 @@ impl Model {
     }
 
     pub fn forward(&self, input: &Tensor) -> Result<Tensor, String> {
-        assert_eq!(
-            input.shape,
-            TensorShape::Flat(self.input_size),
-            "Model input shape mismatch"
-        );
+        assert_eq!(input.shape, self.input_shape, "Model input shape mismatch");
 
         let mut current = Tensor::new(input.data.clone(), input.shape.clone());
 
@@ -60,8 +56,7 @@ impl Model {
         }
 
         assert_eq!(
-            current.shape,
-            TensorShape::Flat(self.output_size),
+            current.shape, self.output_shape,
             "Model output shape mismatch"
         );
 
@@ -77,8 +72,8 @@ mod tests {
     fn test_model_from_json() {
         let json = r#"
         {
-            "input_size": 1,
-            "output_size": 1,
+            "input_shape": { "Flat": 1 },
+            "output_shape": { "Flat": 1 },
             "layers": [
                 {
                     "type": "dense",
@@ -91,8 +86,8 @@ mod tests {
         }
         "#;
         let model = Model::from_json(json).unwrap();
-        assert_eq!(model.input_size, 1);
-        assert_eq!(model.output_size, 1);
+        assert_eq!(model.input_shape, TensorShape::Flat(1));
+        assert_eq!(model.output_shape, TensorShape::Flat(1));
         assert_eq!(model.layers.len(), 1);
     }
 
@@ -100,8 +95,8 @@ mod tests {
     fn test_model_forward_multi_layer() {
         let json = r#"
         {
-            "input_size": 2,
-            "output_size": 1,
+            "input_shape": { "Flat": 2 },
+            "output_shape": { "Flat": 1 },
             "layers": [
                 {
                     "type": "dense",
@@ -132,8 +127,8 @@ mod tests {
     fn test_model_forward_with_activation() {
         let json = r#"
         {
-            "input_size": 2,
-            "output_size": 1,
+            "input_shape": { "Flat": 2 },
+            "output_shape": { "Flat": 1 },
             "layers": [
                 {
                     "type": "dense",
@@ -145,7 +140,7 @@ mod tests {
                 {
                     "type": "activation",
                     "activation_type": "relu",
-                    "input_size": 2
+                    "shape": { "Flat": 2 }
                 },
                 {
                     "type": "dense",
@@ -166,13 +161,59 @@ mod tests {
         assert_eq!(output.data, vec![2.5]);
     }
 
+    /// Model whose input is CHW (a Conv2D layer first), goes through Flatten,
+    /// and finishes as a flat output. Exercises the case that motivated moving
+    /// `Model` from a flat `usize` to a full `TensorShape`.
+    #[test]
+    fn test_model_forward_conv_then_flatten() {
+        let json = r#"
+        {
+            "input_shape": { "CHW": { "channels": 1, "height": 2, "width": 2 } },
+            "output_shape": { "Flat": 1 },
+            "layers": [
+                {
+                    "type": "conv2d",
+                    "kernel_size": 2,
+                    "stride": 1,
+                    "padding": 0,
+                    "input_channels": 1,
+                    "output_channels": 1,
+                    "height": 2,
+                    "width": 2,
+                    "weights": [1.0, 1.0, 1.0, 1.0],
+                    "bias": [0.0]
+                },
+                {
+                    "type": "flatten",
+                    "shape": { "CHW": { "channels": 1, "height": 1, "width": 1 } }
+                }
+            ]
+        }
+        "#;
+        let model = Model::from_json(json).unwrap();
+        assert!(model.validate_shapes().is_ok());
+
+        let input = Tensor::new(
+            vec![1.0, 2.0, 3.0, 4.0],
+            TensorShape::CHW {
+                channels: 1,
+                height: 2,
+                width: 2,
+            },
+        );
+        let output = model.forward(&input).unwrap();
+        // conv2d sums the whole 2x2 window with an all-ones kernel: 1+2+3+4 = 10
+        // flatten is then a no-op on the data
+        assert_eq!(output.data, vec![10.0]);
+    }
+
     #[test]
     #[should_panic(expected = "Model input shape mismatch")]
     fn test_model_wrong_input_size() {
         let json = r#"
         {
-            "input_size": 2,
-            "output_size": 1,
+            "input_shape": { "Flat": 2 },
+            "output_shape": { "Flat": 1 },
             "layers": []
         }
         "#;
@@ -185,8 +226,8 @@ mod tests {
     fn test_model_wrong_output_size() {
         let json = r#"
         {
-            "input_size": 1,
-            "output_size": 2,
+            "input_shape": { "Flat": 1 },
+            "output_shape": { "Flat": 2 },
             "layers": [
                 {
                     "type": "dense",
@@ -206,8 +247,8 @@ mod tests {
     fn test_validate_shapes_ok() {
         let json = r#"
         {
-            "input_size": 2,
-            "output_size": 1,
+            "input_shape": { "Flat": 2 },
+            "output_shape": { "Flat": 1 },
             "layers": [
                 {
                     "type": "dense",
@@ -229,8 +270,8 @@ mod tests {
         // would previously only be caught mid-forward-pass via a panic.
         let json = r#"
         {
-            "input_size": 2,
-            "output_size": 1,
+            "input_shape": { "Flat": 2 },
+            "output_shape": { "Flat": 1 },
             "layers": [
                 {
                     "type": "dense",

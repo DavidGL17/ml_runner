@@ -69,13 +69,13 @@ impl ActivationType {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ActivationLayer {
     pub activation_type: ActivationType,
-    pub input_size: usize,
+    pub shape: TensorShape,
 }
 
 impl ActivationLayer {
     /// The shape this layer expects to receive.
     pub fn input_shape(&self) -> TensorShape {
-        TensorShape::Flat(self.input_size)
+        self.shape.clone()
     }
 
     /// Activations are element-wise (or, for softmax, shape-preserving),
@@ -178,7 +178,7 @@ mod tests {
     fn test_activation_layer_forward() {
         let layer = ActivationLayer {
             activation_type: ActivationType::ReLU,
-            input_size: 3,
+            shape: TensorShape::Flat(3),
         };
         let input = Tensor::flat(vec![-1.0, 0.0, 1.0]);
         let output = layer.forward(&input);
@@ -186,12 +186,46 @@ mod tests {
         assert_eq!(output.data, vec![0.0, 0.0, 1.0]);
     }
 
+    /// Same as above, but sitting between conv layers on CHW data - this is
+    /// the case that motivated storing a full TensorShape instead of assuming
+    /// Flat.
+    #[test]
+    fn test_activation_layer_forward_chw() {
+        let layer = ActivationLayer {
+            activation_type: ActivationType::ReLU,
+            shape: TensorShape::CHW {
+                channels: 1,
+                height: 2,
+                width: 2,
+            },
+        };
+        let input = Tensor::new(
+            vec![-1.0, 0.0, 1.0, 2.0],
+            TensorShape::CHW {
+                channels: 1,
+                height: 2,
+                width: 2,
+            },
+        );
+        let output = layer.forward(&input);
+
+        assert_eq!(
+            output.shape,
+            TensorShape::CHW {
+                channels: 1,
+                height: 2,
+                width: 2,
+            }
+        );
+        assert_eq!(output.data, vec![0.0, 0.0, 1.0, 2.0]);
+    }
+
     #[test]
     #[should_panic(expected = "Shape mismatch in ActivationLayer")]
     fn test_activation_layer_wrong_shape() {
         let layer = ActivationLayer {
             activation_type: ActivationType::ReLU,
-            input_size: 3,
+            shape: TensorShape::Flat(3),
         };
         let input = Tensor::flat(vec![-1.0, 0.0]);
         let _ = layer.forward(&input);

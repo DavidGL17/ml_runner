@@ -14,7 +14,7 @@ pub enum TensorShape {
 
 impl TensorShape {
     /// Total number of scalar elements this shape describes.
-    pub fn numel(&self) -> usize {
+    pub fn total_size(&self) -> usize {
         match self {
             TensorShape::Flat(n) => *n,
             TensorShape::CHW {
@@ -34,11 +34,14 @@ pub struct Tensor {
 
 impl Tensor {
     pub fn new(data: Vec<f32>, shape: TensorShape) -> Self {
-        debug_assert_eq!(data.len(), shape.numel(), "Tensor data/shape size mismatch");
+        debug_assert_eq!(
+            data.len(),
+            shape.total_size(),
+            "Tensor data/shape size mismatch"
+        );
         Tensor { data, shape }
     }
 
-    /// Convenience constructor for the common flat case.
     pub fn flat(data: Vec<f32>) -> Self {
         let n = data.len();
         Tensor::new(data, TensorShape::Flat(n))
@@ -50,19 +53,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn flat_numel_matches_len() {
+    fn flat_total_size_matches_len() {
         let shape = TensorShape::Flat(4);
-        assert_eq!(shape.numel(), 4);
+        assert_eq!(shape.total_size(), 4);
     }
 
     #[test]
-    fn chw_numel_multiplies_dims() {
+    fn chw_total_size_multiplies_dims() {
         let shape = TensorShape::CHW {
             channels: 3,
             height: 4,
             width: 5,
         };
-        assert_eq!(shape.numel(), 60);
+        assert_eq!(shape.total_size(), 60);
     }
 
     #[test]

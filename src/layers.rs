@@ -1,6 +1,7 @@
 use crate::activation::ActivationLayer;
 use crate::conv::Conv2DLayer;
 use crate::dense::DenseLayer;
+use crate::flatten::Flatten;
 use crate::tensor::{Tensor, TensorShape};
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +14,8 @@ pub enum Layer {
     Activation(ActivationLayer),
     #[serde(rename = "conv2d")]
     Conv2D(Conv2DLayer),
+    #[serde(rename = "flatten")]
+    Flatten(Flatten),
 }
 
 impl Layer {
@@ -24,6 +27,7 @@ impl Layer {
             Layer::Dense(layer) => layer.input_shape(),
             Layer::Activation(layer) => layer.input_shape(),
             Layer::Conv2D(layer) => layer.input_shape(),
+            Layer::Flatten(layer) => layer.input_shape(),
         }
     }
 
@@ -33,6 +37,7 @@ impl Layer {
             Layer::Dense(layer) => layer.output_shape(),
             Layer::Activation(layer) => layer.output_shape(),
             Layer::Conv2D(layer) => layer.output_shape(),
+            Layer::Flatten(layer) => layer.output_shape(),
         }
     }
 
@@ -41,6 +46,7 @@ impl Layer {
             Layer::Dense(layer) => layer.forward(input),
             Layer::Activation(layer) => layer.forward(input),
             Layer::Conv2D(layer) => layer.forward(input),
+            Layer::Flatten(layer) => layer.forward(input),
         }
     }
 }
@@ -68,7 +74,7 @@ mod tests {
     fn test_activation_layer_enum_dispatch() {
         let layer = Layer::Activation(ActivationLayer {
             activation_type: ActivationType::Sigmoid,
-            input_size: 1,
+            shape: TensorShape::Flat(1),
         });
         let input = Tensor::flat(vec![0.0]);
         let output = layer.forward(&input);
@@ -108,5 +114,22 @@ mod tests {
         );
         // (1+2+3+4) + bias(1.0) = 11.0
         assert_eq!(output.data, vec![11.0]);
+    }
+
+    #[test]
+    fn test_flatten_layer_enum_dispatch() {
+        let layer = Layer::Flatten(Flatten {
+            shape: TensorShape::CHW {
+                channels: 2,
+                height: 1,
+                width: 2,
+            },
+        });
+
+        let input = Tensor::new(vec![1.0, 2.0, 3.0, 4.0], layer.input_shape());
+        let output = layer.forward(&input);
+
+        assert_eq!(output.shape, TensorShape::Flat(4));
+        assert_eq!(output.data, vec![1.0, 2.0, 3.0, 4.0]);
     }
 }

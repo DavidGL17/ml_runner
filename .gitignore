@@ -3,6 +3,7 @@ __pycache__
 .vscode
 src/model_weights.h
 *.onnx
+*.onnx.data
 target
 Cargo.lock
 export.json

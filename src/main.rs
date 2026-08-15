@@ -1,12 +1,13 @@
 mod activation;
 mod conv;
 mod dense;
+mod flatten;
 mod layers;
 mod model;
 mod tensor;
 
 use crate::model::Model;
-use crate::tensor::Tensor;
+use crate::tensor::{Tensor, TensorShape};
 use std::env;
 use std::fs;
 
@@ -36,18 +37,30 @@ fn main() {
     };
 
     println!("Model loaded successfully from '{}'!", path);
-    println!("Input size: {}", model.input_size);
-    println!("Output size: {}", model.output_size);
+    // println!("Input size: {}", model.input_shape);
+    // println!("Output size: {}", model.input_shape);
 
-    // Catch a misconfigured layer chain (e.g. mismatched dense sizes)
-    // before running any data through it.
-    if let Err(e) = model.validate_shapes() {
-        eprintln!("Model shape validation failed: {}", e);
-        return;
+    // Validate the model
+    match model.validate_shapes() {
+        Ok(m) => m,
+        Err(e) => {
+            eprint!("Error when validating model shapes:\n{}", e);
+            return;
+        }
     }
 
     // Test input
-    let input = Tensor::flat(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]);
+    let input = Tensor::new(
+        [
+            1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.,
+        ]
+        .to_vec(),
+        TensorShape::CHW {
+            channels: 1,
+            height: 4,
+            width: 4,
+        },
+    );
     println!("Input: {:?}", input.data);
 
     // Run forward pass

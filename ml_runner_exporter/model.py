@@ -1,10 +1,15 @@
 from .layer import LayerParser
 
 
-def export_model(model_layers: list[LayerParser], input_size: int, output_size: int) -> dict:
-    """Build the JSON-serializable dict describing the whole model, matching the `Model` struct the Rust runtime deserializes via `Model::from_json`."""
+def export_model(model_layers: list[LayerParser], input_shape: dict, output_shape: dict) -> dict:
+    """Build the JSON-serializable dict describing the whole model, matching the `Model` struct the Rust runtime deserializes via `Model::from_json`.
+
+    `input_shape`/`output_shape` must already be in TensorShape's serde
+    representation, e.g. {"Flat": 10} or
+    {"CHW": {"channels": 3, "height": 4, "width": 5}}.
+    """
     return {
-        "input_size": input_size,
-        "output_size": output_size,
+        "input_shape": input_shape,
+        "output_shape": output_shape,
         "layers": [layer.to_dict() for layer in model_layers],
     }
