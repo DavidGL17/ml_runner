@@ -180,7 +180,7 @@ mod tests {
             activation_type: ActivationType::ReLU,
             shape: TensorShape::Flat(3),
         };
-        let input = Tensor::flat(vec![-1.0, 0.0, 1.0]);
+        let input = Tensor::new(vec![-1.0, 0.0, 1.0], TensorShape::Flat(3));
         let output = layer.forward(&input);
         // ReLU: [-1.0, 0.0, 1.0] -> [0.0, 0.0, 1.0]
         assert_eq!(output.data, vec![0.0, 0.0, 1.0]);
@@ -227,7 +227,7 @@ mod tests {
             activation_type: ActivationType::ReLU,
             shape: TensorShape::Flat(3),
         };
-        let input = Tensor::flat(vec![-1.0, 0.0]);
+        let input = Tensor::new(vec![-1.0, 0.0], TensorShape::Flat(2));
         let _ = layer.forward(&input);
     }
 }

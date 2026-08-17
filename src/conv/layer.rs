@@ -366,7 +366,7 @@ mod tests {
             weights: vec![0.0; 3 * 3 * 3 * 3],
             bias: vec![0.0; 3],
         };
-        let wrong_input = Tensor::flat(vec![0.0; 10]);
+        let wrong_input = Tensor::new(vec![0.0; 10], TensorShape::Flat(10));
         layer.forward(&wrong_input);
     }
 }

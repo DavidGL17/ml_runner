@@ -129,7 +129,7 @@ mod tests {
             },
         };
 
-        let wrong_input = Tensor::flat(vec![0.0; 10]);
+        let wrong_input = Tensor::new(vec![0.0; 10], TensorShape::Flat(10));
         layer.forward(&wrong_input);
     }
 }

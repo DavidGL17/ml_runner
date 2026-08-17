@@ -64,7 +64,7 @@ mod tests {
             weights: vec![2.0],
             bias: vec![1.0],
         });
-        let input = Tensor::flat(vec![0.5]);
+        let input = Tensor::new(vec![0.5], TensorShape::Flat(1));
         let output = layer.forward(&input);
         // (0.5 * 2.0) + 1.0 = 2.0
         assert_eq!(output.data, vec![2.0]);
@@ -76,7 +76,7 @@ mod tests {
             activation_type: ActivationType::Sigmoid,
             shape: TensorShape::Flat(1),
         });
-        let input = Tensor::flat(vec![0.0]);
+        let input = Tensor::new(vec![0.0], TensorShape::Flat(1));
         let output = layer.forward(&input);
         // Sigmoid(0) = 0.5
         assert_eq!(output.data, vec![0.5]);

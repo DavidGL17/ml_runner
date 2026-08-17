@@ -60,7 +60,7 @@ mod tests {
             weights: vec![0.5, 0.5],
             bias: vec![0.1],
         };
-        let input = Tensor::flat(vec![1.0, 2.0]);
+        let input = Tensor::new(vec![1.0, 2.0], TensorShape::Flat(2));
         let output = layer.forward(&input);
         // (1.0 * 0.5) + (2.0 * 0.5) + 0.1 = 1.6
         assert_eq!(output.data, vec![1.6]);
@@ -76,7 +76,7 @@ mod tests {
             weights: vec![0.5, 0.5],
             bias: vec![0.1],
         };
-        let input = Tensor::flat(vec![1.0]);
+        let input = Tensor::new(vec![1.0], TensorShape::Flat(1));
         let _ = layer.forward(&input);
     }
 }

@@ -41,11 +41,6 @@ impl Tensor {
         );
         Tensor { data, shape }
     }
-
-    pub fn flat(data: Vec<f32>) -> Self {
-        let n = data.len();
-        Tensor::new(data, TensorShape::Flat(n))
-    }
 }
 
 #[cfg(test)]
@@ -66,11 +61,5 @@ mod tests {
             width: 5,
         };
         assert_eq!(shape.total_size(), 60);
-    }
-
-    #[test]
-    fn flat_constructor_infers_shape() {
-        let t = Tensor::flat(vec![1.0, 2.0, 3.0]);
-        assert_eq!(t.shape, TensorShape::Flat(3));
     }
 }

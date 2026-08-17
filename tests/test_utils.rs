@@ -1,6 +1,6 @@
 use approx::AbsDiffEq;
 use core::panic;
-use ml_runner::tensor::Tensor;
+use ml_runner::tensor::{Tensor, TensorShape};
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
@@ -24,8 +24,22 @@ impl FixtureModelInput {
         let json_value: Value = serde_json::from_str(&json_content)
             .unwrap_or_else(|e| panic!("Error parsing JSON '{}': '{}'", path.display(), e));
 
+        let model_value = &json_value["model"];
+
         // Extract the model field and convert it back to a string
-        let model_json = json_value["model"].to_string();
+        let model_json = model_value.to_string();
+
+        // The model itself declares the shape its input must be - read that
+        // rather than assuming Flat, so fixtures for conv models (CHW input)
+        // work the same way as fixtures for dense models (Flat input).
+        let input_shape: TensorShape = serde_json::from_value(model_value["input_shape"].clone())
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Error parsing model input_shape from fixture '{}': '{}'",
+                    path.display(),
+                    e
+                )
+            });
 
         // Extract test_input and test_output
         let test_input: Vec<f32> = json_value["test_input"]
@@ -44,11 +58,10 @@ impl FixtureModelInput {
 
         FixtureModelInput {
             model_json,
-            // Fixtures only ever describe flat vector inputs today, so
-            // Tensor::flat is the right constructor here. If a fixture
-            // ever needs to describe a CHW input (e.g. for a conv model),
-            // this will need to read a "test_input_shape" field instead.
-            test_input: Tensor::flat(test_input),
+            // Tensor::new's debug_assert_eq on numel() will panic with a clear
+            // message if input_shape and the flat test_input array disagree on
+            // size, so no separate validation is needed here.
+            test_input: Tensor::new(test_input, input_shape),
             test_output,
         }
     }

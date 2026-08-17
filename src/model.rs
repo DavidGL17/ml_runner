@@ -116,7 +116,7 @@ mod tests {
         }
         "#;
         let model = Model::from_json(json).unwrap();
-        let input = Tensor::flat(vec![1.0, 1.0]);
+        let input = Tensor::new(vec![1.0, 1.0], TensorShape::Flat(2));
         let output = model.forward(&input).unwrap();
         // Layer 1: [0.5*1 + 0.5*1, 0.5*1 + 0.5*1] = [1.0, 1.0]
         // Layer 2: [1.0*1 + 1.0*1 + 0.5] = [2.5]
@@ -153,7 +153,7 @@ mod tests {
         }
         "#;
         let model = Model::from_json(json).unwrap();
-        let input = Tensor::flat(vec![1.0, 1.0]);
+        let input = Tensor::new(vec![1.0, 1.0], TensorShape::Flat(2));
         let output = model.forward(&input).unwrap();
         // Layer 1: [0.5*1 + 0.5*1, 0.5*1 + 0.5*1] = [1.0, 1.0]
         // Layer 2 (ReLU): [1.0, 1.0] (no change since values are positive)
@@ -218,7 +218,7 @@ mod tests {
         }
         "#;
         let model = Model::from_json(json).unwrap();
-        let _ = model.forward(&Tensor::flat(vec![1.0]));
+        let _ = model.forward(&Tensor::new(vec![1.0], TensorShape::Flat(1)));
     }
 
     #[test]
@@ -240,7 +240,7 @@ mod tests {
         }
         "#;
         let model = Model::from_json(json).unwrap();
-        let _ = model.forward(&Tensor::flat(vec![1.0]));
+        let _ = model.forward(&Tensor::new(vec![1.0], TensorShape::Flat(1)));
     }
 
     #[test]
