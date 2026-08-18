@@ -11,9 +11,11 @@ A small library that aims to provide a fast and device agnostic way of running p
 
 ### Supported layers
 
-| layer  | simple forward | simd  |
-| :----: | :------------: | :---: |
-| Linear |      yes       |  yes  |
+|  layer  | simple forward | simd  |
+| :-----: | :------------: | :---: |
+| Conv2D  |      yes       |  no   |
+| Flatten |      yes       |  no   |
+| Linear  |      yes       |  yes  |
 
 ### Supported activation functions
 
