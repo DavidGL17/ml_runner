@@ -79,6 +79,7 @@ To run the library, you can use one of the following targets :
 
 - `cargo run` to run the default target (no optimization)
 - `cargo run --features simd` to run with SIMD optimizations (requires `wide` crate)
+- To compile in release mode, use `cargo run -r` (add the feature you want after) 
 
 #### Testing
 
@@ -89,7 +90,8 @@ To run the tests, you can use `cargo test --all-features` to run all tests
 
 These are the next features that I would like to implement, in no specific order
 
-- Add activation functions support
+- Add activation functions support in simd
 - Add support for more layer types (Conv, etc.)
 - Export both the python library and rust library to pip/crates.io for easier usage
 - Add support for non linear models (meaning models that are not just a simple chaining of layers but that have multiple paths and potentially multiple inputs/outputs)
+- Add support to other optimization backends (cuda, ...)
