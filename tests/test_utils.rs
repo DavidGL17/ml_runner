@@ -30,7 +30,7 @@ impl FixtureModelInput {
         let model_json = model_value.to_string();
 
         // The model itself declares the shape its input must be - read that
-        // rather than assuming Flat, so fixtures for conv models (CHW input)
+        // rather than assuming Flat, so fixtures for conv models (D3 input)
         // work the same way as fixtures for dense models (Flat input).
         let input_shape: TensorShape = serde_json::from_value(model_value["input_shape"].clone())
             .unwrap_or_else(|e| {

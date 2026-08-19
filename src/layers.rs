@@ -1,7 +1,8 @@
 use crate::activation::ActivationLayer;
 use crate::conv::Conv2DLayer;
 use crate::dense::DenseLayer;
-use crate::flatten::Flatten;
+use crate::flatten::FlattenLayer;
+use crate::rnn::RNNLayer;
 use crate::tensor::{Tensor, TensorShape};
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +16,9 @@ pub enum Layer {
     #[serde(rename = "conv2d")]
     Conv2D(Conv2DLayer),
     #[serde(rename = "flatten")]
-    Flatten(Flatten),
+    Flatten(FlattenLayer),
+    #[serde(rename = "rnn")]
+    RNN(RNNLayer),
 }
 
 impl Layer {
@@ -28,6 +31,7 @@ impl Layer {
             Layer::Activation(layer) => layer.input_shape(),
             Layer::Conv2D(layer) => layer.input_shape(),
             Layer::Flatten(layer) => layer.input_shape(),
+            Layer::RNN(layer) => layer.input_shape(),
         }
     }
 
@@ -38,6 +42,7 @@ impl Layer {
             Layer::Activation(layer) => layer.output_shape(),
             Layer::Conv2D(layer) => layer.output_shape(),
             Layer::Flatten(layer) => layer.output_shape(),
+            Layer::RNN(layer) => layer.output_shape(),
         }
     }
 
@@ -47,6 +52,7 @@ impl Layer {
             Layer::Activation(layer) => layer.forward(input),
             Layer::Conv2D(layer) => layer.forward(input),
             Layer::Flatten(layer) => layer.forward(input),
+            Layer::RNN(layer) => layer.forward(input),
         }
     }
 }
@@ -106,10 +112,10 @@ mod tests {
 
         assert_eq!(
             output.shape,
-            TensorShape::CHW {
-                channels: 1,
-                height: 1,
-                width: 1,
+            TensorShape::D3 {
+                dim1: 1,
+                dim2: 1,
+                dim3: 1,
             }
         );
         // (1+2+3+4) + bias(1.0) = 11.0
@@ -118,11 +124,11 @@ mod tests {
 
     #[test]
     fn test_flatten_layer_enum_dispatch() {
-        let layer = Layer::Flatten(Flatten {
-            shape: TensorShape::CHW {
-                channels: 2,
-                height: 1,
-                width: 2,
+        let layer = Layer::Flatten(FlattenLayer {
+            shape: TensorShape::D3 {
+                dim1: 2,
+                dim2: 1,
+                dim3: 2,
             },
         });
 

@@ -186,35 +186,35 @@ mod tests {
         assert_eq!(output.data, vec![0.0, 0.0, 1.0]);
     }
 
-    /// Same as above, but sitting between conv layers on CHW data - this is
+    /// Same as above, but sitting between conv layers on D3 data - this is
     /// the case that motivated storing a full TensorShape instead of assuming
     /// Flat.
     #[test]
-    fn test_activation_layer_forward_chw() {
+    fn test_activation_layer_forward_d3() {
         let layer = ActivationLayer {
             activation_type: ActivationType::ReLU,
-            shape: TensorShape::CHW {
-                channels: 1,
-                height: 2,
-                width: 2,
+            shape: TensorShape::D3 {
+                dim1: 1,
+                dim2: 2,
+                dim3: 2,
             },
         };
         let input = Tensor::new(
             vec![-1.0, 0.0, 1.0, 2.0],
-            TensorShape::CHW {
-                channels: 1,
-                height: 2,
-                width: 2,
+            TensorShape::D3 {
+                dim1: 1,
+                dim2: 2,
+                dim3: 2,
             },
         );
         let output = layer.forward(&input);
 
         assert_eq!(
             output.shape,
-            TensorShape::CHW {
-                channels: 1,
-                height: 2,
-                width: 2,
+            TensorShape::D3 {
+                dim1: 1,
+                dim2: 2,
+                dim3: 2,
             }
         );
         assert_eq!(output.data, vec![0.0, 0.0, 1.0, 2.0]);

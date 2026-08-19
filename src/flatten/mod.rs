@@ -1,3 +1,3 @@
 mod layer;
 
-pub use layer::Flatten;
+pub use layer::FlattenLayer;

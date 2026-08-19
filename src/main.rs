@@ -4,6 +4,7 @@ mod dense;
 mod flatten;
 mod layers;
 mod model;
+mod rnn;
 mod tensor;
 
 use crate::model::Model;

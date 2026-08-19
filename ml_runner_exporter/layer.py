@@ -98,12 +98,12 @@ class FlattenLayerParser(LayerParser):
         return {
             "type": self.layer_type,
             # Matches TensorShape's default (externally-tagged) serde representation:
-            # the CHW variant serializes as {"CHW": {"channels": .., "height": .., "width": ..}}
+            # the D3 variant serializes as {"D3": {"dim1": .., "dim2": .., "dim3": ..}}
             "shape": {
-                "CHW": {
-                    "channels": self.channels,
-                    "height": self.height,
-                    "width": self.width,
+                "D3": {
+                    "dim1": self.channels,
+                    "dim2": self.height,
+                    "dim3": self.width,
                 }
             },
         }

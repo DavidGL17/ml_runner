@@ -161,14 +161,14 @@ mod tests {
         assert_eq!(output.data, vec![2.5]);
     }
 
-    /// Model whose input is CHW (a Conv2D layer first), goes through Flatten,
+    /// Model whose input is D3 (a Conv2D layer first), goes through Flatten,
     /// and finishes as a flat output. Exercises the case that motivated moving
     /// `Model` from a flat `usize` to a full `TensorShape`.
     #[test]
     fn test_model_forward_conv_then_flatten() {
         let json = r#"
         {
-            "input_shape": { "CHW": { "channels": 1, "height": 2, "width": 2 } },
+            "input_shape": { "D3": { "dim1": 1, "dim2": 2, "dim3": 2 } },
             "output_shape": { "Flat": 1 },
             "layers": [
                 {
@@ -185,7 +185,7 @@ mod tests {
                 },
                 {
                     "type": "flatten",
-                    "shape": { "CHW": { "channels": 1, "height": 1, "width": 1 } }
+                    "shape": { "D3": { "dim1": 1, "dim2": 1, "dim3": 1 } }
                 }
             ]
         }
@@ -195,10 +195,10 @@ mod tests {
 
         let input = Tensor::new(
             vec![1.0, 2.0, 3.0, 4.0],
-            TensorShape::CHW {
-                channels: 1,
-                height: 2,
-                width: 2,
+            TensorShape::D3 {
+                dim1: 1,
+                dim2: 2,
+                dim3: 2,
             },
         );
         let output = model.forward(&input).unwrap();

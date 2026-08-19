@@ -17,19 +17,19 @@ pub struct Conv2DLayer {
 impl Conv2DLayer {
     /// The shape this layer expects to receive.
     pub fn input_shape(&self) -> TensorShape {
-        TensorShape::CHW {
-            channels: self.input_channels,
-            height: self.height,
-            width: self.width,
+        TensorShape::D3 {
+            dim1: self.input_channels,
+            dim2: self.height,
+            dim3: self.width,
         }
     }
 
     /// The shape this layer produces, given a matching input shape.
     pub fn output_shape(&self) -> TensorShape {
-        TensorShape::CHW {
-            channels: self.output_channels,
-            height: (self.height + 2 * self.padding - self.kernel_size) / self.stride + 1,
-            width: (self.width + 2 * self.padding - self.kernel_size) / self.stride + 1,
+        TensorShape::D3 {
+            dim1: self.output_channels,
+            dim2: (self.height + 2 * self.padding - self.kernel_size) / self.stride + 1,
+            dim3: (self.width + 2 * self.padding - self.kernel_size) / self.stride + 1,
         }
     }
 
@@ -51,7 +51,7 @@ impl Conv2DLayer {
 
         let out_shape = self.output_shape();
         let (out_h, out_w) = match out_shape {
-            TensorShape::CHW { height, width, .. } => (height, width),
+            TensorShape::D3 { dim2: height, dim3: width, .. } => (height, width),
             _ => unreachable!(),
         };
 
@@ -122,10 +122,10 @@ mod tests {
 
         assert_eq!(
             layer.output_shape(),
-            TensorShape::CHW {
-                channels: 3,
-                height: 224,
-                width: 224,
+            TensorShape::D3 {
+                dim1: 3,
+                dim2: 224,
+                dim3: 224,
             }
         );
     }
@@ -158,10 +158,10 @@ mod tests {
 
         assert_eq!(
             output.shape,
-            TensorShape::CHW {
-                channels: 1,
-                height: 2,
-                width: 2,
+            TensorShape::D3 {
+                dim1: 1,
+                dim2: 2,
+                dim3: 2,
             }
         );
         // window sums: [1+2+4+5, 2+3+5+6, 4+5+7+8, 5+6+8+9]
@@ -225,10 +225,10 @@ mod tests {
 
         assert_eq!(
             output.shape,
-            TensorShape::CHW {
-                channels: 1,
-                height: 3,
-                width: 3,
+            TensorShape::D3 {
+                dim1: 1,
+                dim2: 3,
+                dim3: 3,
             }
         );
         #[rustfmt::skip]
@@ -269,10 +269,10 @@ mod tests {
 
         assert_eq!(
             output.shape,
-            TensorShape::CHW {
-                channels: 1,
-                height: 2,
-                width: 2,
+            TensorShape::D3 {
+                dim1: 1,
+                dim2: 2,
+                dim3: 2,
             }
         );
         assert_eq!(output.data, vec![14.0, 22.0, 46.0, 54.0]);
@@ -338,10 +338,10 @@ mod tests {
 
         assert_eq!(
             output.shape,
-            TensorShape::CHW {
-                channels: 2,
-                height: 2,
-                width: 2,
+            TensorShape::D3 {
+                dim1: 2,
+                dim2: 2,
+                dim3: 2,
             }
         );
         // channel 0: input * 5

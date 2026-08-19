@@ -2,13 +2,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TensorShape {
-    /// A plain 1-D vector of `n` values - used by `DenseLayer` and `ActivationLayer`.
     Flat(usize),
-    /// Channels x height x width - used by convolutional layers.
-    CHW {
-        channels: usize,
-        height: usize,
-        width: usize,
+    D3 {
+        dim1: usize,
+        dim2: usize,
+        dim3: usize,
     },
 }
 
@@ -17,11 +15,11 @@ impl TensorShape {
     pub fn total_size(&self) -> usize {
         match self {
             TensorShape::Flat(n) => *n,
-            TensorShape::CHW {
-                channels,
-                height,
-                width,
-            } => channels * height * width,
+            TensorShape::D3 {
+                dim1,
+                dim2,
+                dim3,
+            } => dim1 * dim2 * dim3,
         }
     }
 }
@@ -54,11 +52,11 @@ mod tests {
     }
 
     #[test]
-    fn chw_total_size_multiplies_dims() {
-        let shape = TensorShape::CHW {
-            channels: 3,
-            height: 4,
-            width: 5,
+    fn d3_total_size_multiplies_dims() {
+        let shape = TensorShape::D3 {
+            dim1: 3,
+            dim2: 4,
+            dim3: 5,
         };
         assert_eq!(shape.total_size(), 60);
     }

@@ -2,11 +2,11 @@ use crate::tensor::{Tensor, TensorShape};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Flatten {
+pub struct FlattenLayer {
     pub shape: TensorShape,
 }
 
-impl Flatten {
+impl FlattenLayer {
     /// The shape this layer expects to receive.
     pub fn input_shape(&self) -> TensorShape {
         self.shape.clone()
@@ -43,12 +43,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_flatten_output_shape_from_chw() {
-        let layer = Flatten {
-            shape: TensorShape::CHW {
-                channels: 3,
-                height: 4,
-                width: 5,
+    fn test_flatten_output_shape_from_d3() {
+        let layer = FlattenLayer {
+            shape: TensorShape::D3 {
+                dim1: 3,
+                dim2: 4,
+                dim3: 5,
             },
         };
 
@@ -57,7 +57,7 @@ mod tests {
 
     #[test]
     fn test_flatten_output_shape_from_flat() {
-        let layer = Flatten {
+        let layer = FlattenLayer {
             shape: TensorShape::Flat(10),
         };
 
@@ -65,15 +65,15 @@ mod tests {
     }
 
     /// Since `Tensor::data` is already a flat `Vec<f32>` regardless of shape,
-    /// flattening a CHW tensor should preserve element order exactly -
+    /// flattening a D3 tensor should preserve element order exactly -
     /// only the shape metadata changes, not the underlying data.
     #[test]
     fn test_forward_preserves_data_order() {
-        let layer = Flatten {
-            shape: TensorShape::CHW {
-                channels: 3,
-                height: 2,
-                width: 2,
+        let layer = FlattenLayer {
+            shape: TensorShape::D3 {
+                dim1: 3,
+                dim2: 2,
+                dim3: 2,
             },
         };
 
@@ -107,7 +107,7 @@ mod tests {
     /// Flattening an already-flat tensor is a no-op on the data.
     #[test]
     fn test_forward_on_already_flat_input() {
-        let layer = Flatten {
+        let layer = FlattenLayer {
             shape: TensorShape::Flat(4),
         };
 
@@ -121,11 +121,11 @@ mod tests {
     #[test]
     #[should_panic(expected = "Shape mismatch")]
     fn test_forward_rejects_wrong_input_shape() {
-        let layer = Flatten {
-            shape: TensorShape::CHW {
-                channels: 3,
-                height: 4,
-                width: 5,
+        let layer = FlattenLayer {
+            shape: TensorShape::D3 {
+                dim1: 3,
+                dim2: 4,
+                dim3: 5,
             },
         };
 
