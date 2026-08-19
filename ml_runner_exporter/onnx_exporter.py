@@ -1,34 +1,13 @@
 import onnx
 from onnx import numpy_helper, shape_inference
+
+from ml_runner_exporter.layers.activation import ActivationLayerParser
+from ml_runner_exporter.layers.conv import Conv2DLayerParser
+from ml_runner_exporter.layers.flatten import FlattenLayerParser
+from ml_runner_exporter.layers.linear import LinearLayerParser
+from ml_runner_exporter.utils import onnx_shape_to_tensor_shape
 from .model import export_model
-from .layer import (
-    LayerParser,
-    LinearLayerParser,
-    ActivationTypes,
-    ActivationLayerParser,
-    Conv2DLayerParser,
-    FlattenLayerParser,
-)
-
-
-def _onnx_shape_to_tensor_shape(shape: tuple) -> dict:
-    """Convert an ONNX (N, ...) shape into TensorShape's serde JSON representation.
-
-    Drops the leading batch dimension. A single remaining dim becomes
-    {"Flat": n}; three remaining dims (C, H, W) become
-    {"D3": {"dim1": .., "dim2": .., "dim3": ..}}.
-    """
-    dims = tuple(shape[1:])
-
-    if len(dims) == 1:
-        return {"Flat": dims[0]}
-    elif len(dims) == 3:
-        dim1, dim2, dim3 = dims
-        return {"D3": {"dim1": dim1, "dim2": dim2, "dim3": dim3}}
-    else:
-        raise ValueError(
-            f"Unsupported model input/output shape {shape}: expected a single " "feature dim (N, F) or a D3 dim (N, C, H, W) after the batch dimension"
-        )
+from .layer import LayerParser
 
 
 def export_onnx(model_path: str) -> dict:
@@ -64,11 +43,11 @@ def export_onnx(model_path: str) -> dict:
     out_shape: dict = {}
     for inp in graph.input:
         shape = tuple(d.dim_value for d in inp.type.tensor_type.shape.dim)
-        in_shape = _onnx_shape_to_tensor_shape(shape)
+        in_shape = onnx_shape_to_tensor_shape(shape)
 
     for out in graph.output:
         shape = tuple(d.dim_value for d in out.type.tensor_type.shape.dim)
-        out_shape = _onnx_shape_to_tensor_shape(shape)
+        out_shape = onnx_shape_to_tensor_shape(shape)
 
     # --- Iterate over layers (nodes) ---
     layers: list[LayerParser] = []
@@ -80,108 +59,13 @@ def export_onnx(model_path: str) -> dict:
         bias_vector = node_weights[1] if len(node_weights) > 1 else None
 
         if node.op_type == "Gemm":
-            input_size = weight_matrix.shape[1] if weight_matrix is not None else None
-            output_size = weight_matrix.shape[0] if weight_matrix is not None else None
-            layer = LinearLayerParser(
-                layer_num=i,
-                input_size=input_size,
-                output_size=output_size,
-                weights=weight_matrix.tolist() if weight_matrix is not None else [],
-                bias=bias_vector.tolist() if bias_vector is not None else [],
-            )
-
+            layer = LinearLayerParser.linear_layer_from_onnx(weight_matrix, bias_vector)
         elif node.op_type == "Conv":
-            if weight_matrix is None:
-                raise ValueError(f"Conv node {node.name} is missing its weight tensor")
-
-            attrs = {a.name: a for a in node.attribute}
-
-            group = attrs["group"].i if "group" in attrs else 1
-            if group != 1:
-                raise ValueError(f"Conv node {node.name} uses group={group}; grouped convolutions " "are not supported by the Rust Conv2DLayer")
-
-            kernel_shape = list(attrs["kernel_shape"].ints) if "kernel_shape" in attrs else list(weight_matrix.shape[2:])
-            if len(set(kernel_shape)) != 1:
-                raise ValueError(f"Conv node {node.name} has a non-square kernel {kernel_shape}; " "only square kernels are supported")
-
-            strides = list(attrs["strides"].ints) if "strides" in attrs else [1, 1]
-            if len(set(strides)) != 1:
-                raise ValueError(f"Conv node {node.name} has non-uniform strides {strides}; " "only a single stride value is supported")
-
-            pads = list(attrs["pads"].ints) if "pads" in attrs else [0, 0, 0, 0]
-            if len(set(pads)) != 1:
-                raise ValueError(f"Conv node {node.name} has asymmetric padding {pads}; " "only symmetric padding is supported")
-
-            input_tensor_name = node.input[0]
-            input_shape = tensor_shapes.get(input_tensor_name)
-            if input_shape is None or len(input_shape) != 4:
-                raise ValueError(f"Could not determine a 4D (N, C, H, W) input shape for Conv node {node.name}")
-
-            _, in_channels, height, width = input_shape
-            out_channels = weight_matrix.shape[0]
-
-            layer = Conv2DLayerParser(
-                layer_num=i,
-                kernel_size=kernel_shape[0],
-                stride=strides[0],
-                padding=pads[0],
-                input_channels=in_channels,
-                output_channels=out_channels,
-                height=height,
-                width=width,
-                weights=weight_matrix.tolist(),
-                bias=bias_vector.tolist() if bias_vector is not None else [0.0] * out_channels,
-            )
-
+            layer = Conv2DLayerParser.conv2d_layer_from_onnx(node, tensor_shapes, weight_matrix, bias_vector)
         elif node.op_type in ("Flatten", "Reshape"):
-            # torch.onnx.export commonly constant-folds nn.Flatten into a plain
-            # Reshape node (with a constant target-shape tensor) when the input
-            # shape is fully static, rather than emitting an onnx::Flatten node.
-            # Both represent the same operation here, so handle them together.
-            input_tensor_name = node.input[0]
-            input_shape = tensor_shapes.get(input_tensor_name)
-            if input_shape is None or len(input_shape) != 4:
-                raise ValueError(f"Could not determine a 4D (N, C, H, W) input shape for " f"{node.op_type} node {node.name}")
-
-            _, channels, height, width = input_shape
-
-            if node.op_type == "Flatten":
-                attrs = {a.name: a for a in node.attribute}
-                axis = attrs["axis"].i if "axis" in attrs else 1
-                if axis != 1:
-                    raise ValueError(f"Flatten node {node.name} uses axis={axis}; only axis=1 " "(flattening the full C, H, W into one dimension) is supported")
-            else:  # Reshape
-                # Verify the constant target shape actually matches a flatten
-                # ((batch, features)) rather than some other reshape pattern.
-                if len(node.input) < 2 or node.input[1] not in weights:
-                    raise ValueError(f"Reshape node {node.name} has no constant target shape; " "cannot verify it represents a flatten")
-                target_shape = weights[node.input[1]].tolist()
-                expected_features = channels * height * width
-                if not (len(target_shape) == 2 and target_shape[1] in (expected_features, -1)):
-                    raise ValueError(f"Reshape node {node.name} has target shape {target_shape}; " "only a (batch, -1) flatten reshape is supported")
-
-            layer = FlattenLayerParser(
-                layer_num=i,
-                channels=channels,
-                height=height,
-                width=width,
-            )
-
+            layer = FlattenLayerParser.flatten_layer_from_onnx(node, tensor_shapes, weights)
         elif node.op_type in ["Relu", "Sigmoid", "Tanh", "Softmax"]:
-            # 1. Get the name of the input tensor to this activation
-            input_tensor_name = node.input[0]
-
-            # 2. Look up the shape in our tensor_shapes dictionary
-            shape = tensor_shapes.get(input_tensor_name)
-            if shape is None:
-                raise ValueError(f"Could not determine input shape for activation node {node.name}; " "shape inference may have failed")
-
-            # 3. Convert to TensorShape's representation (Flat after a Dense
-            #    layer, D3 after a Conv2D layer) - same helper used for the
-            #    model's overall input/output shape.
-            layer_shape = _onnx_shape_to_tensor_shape(shape)
-
-            layer = ActivationLayerParser(i, ActivationTypes.from_onnx_type(node.op_type), layer_shape)
+            layer = ActivationLayerParser.activation_layer_from_onnx(node, tensor_shapes)
         else:
             raise ValueError(f"Unsupported layer type: {node.op_type}")
 

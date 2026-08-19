@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TensorShape {
     Flat(usize),
+    D2 {
+        dim1: usize,
+        dim2: usize,
+    },
     D3 {
         dim1: usize,
         dim2: usize,
@@ -15,11 +19,8 @@ impl TensorShape {
     pub fn total_size(&self) -> usize {
         match self {
             TensorShape::Flat(n) => *n,
-            TensorShape::D3 {
-                dim1,
-                dim2,
-                dim3,
-            } => dim1 * dim2 * dim3,
+            TensorShape::D2 { dim1, dim2 } => dim1 * dim2,
+            TensorShape::D3 { dim1, dim2, dim3 } => dim1 * dim2 * dim3,
         }
     }
 }
@@ -49,6 +50,15 @@ mod tests {
     fn flat_total_size_matches_len() {
         let shape = TensorShape::Flat(4);
         assert_eq!(shape.total_size(), 4);
+    }
+
+    #[test]
+    fn d2_total_size_multiplies_dims() {
+        let shape = TensorShape::D2 {
+            dim1: 3,
+            dim2: 4,
+        };
+        assert_eq!(shape.total_size(), 12);
     }
 
     #[test]
