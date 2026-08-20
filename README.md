@@ -86,7 +86,6 @@ To run the library, you can use one of the following targets :
 
 To run the tests, you can use `cargo test --all-features` to run all tests
 
-
 ## Roadmap
 
 These are the next features that I would like to implement, in no specific order
