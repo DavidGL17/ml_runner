@@ -21,11 +21,11 @@ impl RNNLayer {
 
     pub fn forward(&self, input: &Tensor) -> Tensor {
         assert_eq!(
-            input.shape,
+            input.shape(),
             self.input_shape(),
-            "Shape mismatch in DenseLayer: expected {:?}, got {:?}",
+            "Shape mismatch in RNNLayer: expected {:?}, got {:?}",
             self.input_shape(),
-            input.shape
+            input.shape()
         );
 
         Tensor::new(vec![1.], self.output_shape())

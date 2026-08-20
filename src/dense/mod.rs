@@ -1,39 +1,27 @@
-//! Pluggable compute backends for layer math, plus the `DenseLayer` type
-//! that uses them.
+//! The `DenseLayer` type (fields + declared shapes in `layer.rs`). Its
+//! forward pass lives in exactly one sibling module, chosen at compile
+//! time via this crate's Cargo features (see `Cargo.toml`):
 //!
-//! Which backend is compiled into the binary is decided entirely at build
-//! time via Cargo features (see `Cargo.toml`). There is no runtime
-//! detection and no function-pointer indirection: the `#[cfg(...)]` blocks
-//! below make sure exactly one implementation of `dense_forward` exists in
-//! the final binary, so this is friendly to `no_std` / embedded targets
-//! where you know the target hardware ahead of time.
+//!   - `scalar.rs` (default, i.e. whenever `simd` is *not* enabled): via
+//!     `ndarray`'s `.dot()` - `ndarray`'s own portable `matrixmultiply`
+//!     crate, or a linked system BLAS with the `blas` feature.
+//!   - `simd.rs` (with the `simd` feature): a dependency-light backend
+//!     using the `wide` crate, bypassing `ndarray`'s `.dot()`/BLAS
+//!     entirely - no library needs linking, which is what makes this the
+//!     option for embedded/microcontroller targets that support SIMD but
+//!     have no BLAS port available.
 //!
-//! To add a new backend (e.g. a CMSIS-NN or DSP-specific path for a given
-//! microcontroller):
-//!   1. Add a new module here (e.g. `pub mod cmsis;`) gated behind a new
-//!      Cargo feature.
-//!   2. Implement a `dense_forward` function with the same signature as
-//!      the ones in `scalar.rs` / `simd.rs`.
-//!   3. Add a `#[cfg(feature = "...")]` arm in the re-export below,
-//!      ordered by priority (most specific/fastest first).
-
-pub mod scalar;
-
-#[cfg(feature = "simd")]
-pub mod simd;
+//! Note that `ndarray` itself is always a dependency of this crate
+//! regardless of which backend is picked here - it's what `Tensor` is
+//! built on (see `src/tensor.rs`), not just something this module opts
+//! into.
 
 mod layer;
 
-pub use layer::DenseLayer;
-
-// --- Compile-time backend selection -----------------------------------
-//
-// Exactly one of these `pub use` lines is active depending on which
-// features are enabled. If more backends are added later, list them here
-// with the highest-priority one first, guarded so only one wins.
+#[cfg(not(feature = "simd"))]
+mod scalar;
 
 #[cfg(feature = "simd")]
-pub use simd::dense_forward;
+mod simd;
 
-#[cfg(not(feature = "simd"))]
-pub use scalar::dense_forward;
+pub use layer::DenseLayer;

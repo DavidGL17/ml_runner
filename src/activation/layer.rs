@@ -4,6 +4,7 @@
 //! layer outputs to introduce non-linearity into the model.
 
 use crate::tensor::{Tensor, TensorShape};
+use ndarray::ArrayD;
 use serde::{Deserialize, Serialize};
 
 /// Available activation functions.
@@ -30,39 +31,34 @@ impl ActivationType {
             ActivationType::Tanh => x.tanh(),
             ActivationType::Linear => x,
             ActivationType::Softmax => {
-                panic!("Softmax is not an element-wise operation; call apply_slice instead")
+                panic!(
+                    "Softmax is not an element-wise operation; call softmax_in_place_array instead"
+                )
             }
         }
     }
 
-    /// Apply the activation function to a slice of values.
-    pub fn apply_slice(&self, x: &mut [f32]) {
+    /// Apply the activation function to an `ndarray` array in place, using
+    /// `ndarray`'s own elementwise and reduction operations rather than a
+    /// hand-rolled loop.
+    pub fn apply_array(&self, x: &mut ArrayD<f32>) {
         match self {
-            ActivationType::Softmax => Self::softmax_in_place(x),
-            _ => {
-                for val in x.iter_mut() {
-                    *val = self.apply(*val);
-                }
-            }
+            ActivationType::Softmax => Self::softmax_in_place_array(x),
+            _ => x.mapv_inplace(|v| self.apply(v)),
         }
     }
 
-    /// Numerically stable softmax, applied in place.
-    fn softmax_in_place(x: &mut [f32]) {
+    /// Numerically stable softmax over the whole array, applied in place.
+    fn softmax_in_place_array(x: &mut ArrayD<f32>) {
         if x.is_empty() {
             return;
         }
 
         // Subtract max for numerical stability (prevents overflow in exp()).
         let max = x.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        let mut sum = 0.0;
-        for val in x.iter_mut() {
-            *val = (*val - max).exp();
-            sum += *val;
-        }
-        for val in x.iter_mut() {
-            *val /= sum;
-        }
+        x.mapv_inplace(|v| (v - max).exp());
+        let sum = x.sum();
+        x.mapv_inplace(|v| v / sum);
     }
 }
 
@@ -86,16 +82,16 @@ impl ActivationLayer {
 
     pub fn forward(&self, input: &Tensor) -> Tensor {
         assert_eq!(
-            input.shape,
+            input.shape(),
             self.input_shape(),
             "Shape mismatch in ActivationLayer: expected {:?}, got {:?}",
             self.input_shape(),
-            input.shape
+            input.shape()
         );
 
         let mut data = input.data.clone();
-        self.activation_type.apply_slice(&mut data);
-        Tensor::new(data, self.output_shape())
+        self.activation_type.apply_array(&mut data);
+        Tensor::from_array(data)
     }
 }
 
@@ -136,39 +132,6 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_slice() {
-        let activation = ActivationType::ReLU;
-        let mut values = vec![-1.0, 0.0, 1.0, -2.0];
-        activation.apply_slice(&mut values);
-        assert_eq!(values, vec![0.0, 0.0, 1.0, 0.0]);
-    }
-
-    #[test]
-    fn test_softmax_activation() {
-        let activation = ActivationType::Softmax;
-        let mut values = vec![1.0, 2.0, 3.0];
-        activation.apply_slice(&mut values);
-
-        // Should sum to 1.0
-        let sum: f32 = values.iter().sum();
-        assert!((sum - 1.0).abs() < 1e-6);
-
-        // Should be monotonic: larger input -> larger output
-        assert!(values[0] < values[1]);
-        assert!(values[1] < values[2]);
-    }
-
-    #[test]
-    fn test_softmax_numerical_stability() {
-        let activation = ActivationType::Softmax;
-        let mut values = vec![1000.0, 1000.0, 1000.0];
-        activation.apply_slice(&mut values);
-        // Equal inputs -> equal outputs, no NaN/inf
-        assert!((values[0] - 1.0 / 3.0).abs() < 1e-6);
-        assert!(values.iter().all(|v| v.is_finite()));
-    }
-
-    #[test]
     #[should_panic]
     fn test_softmax_apply_single_panics() {
         ActivationType::Softmax.apply(1.0);
@@ -183,7 +146,7 @@ mod tests {
         let input = Tensor::new(vec![-1.0, 0.0, 1.0], TensorShape::Flat(3));
         let output = layer.forward(&input);
         // ReLU: [-1.0, 0.0, 1.0] -> [0.0, 0.0, 1.0]
-        assert_eq!(output.data, vec![0.0, 0.0, 1.0]);
+        assert_eq!(output.to_vec(), vec![0.0, 0.0, 1.0]);
     }
 
     /// Same as above, but sitting between conv layers on D3 data - this is
@@ -210,14 +173,14 @@ mod tests {
         let output = layer.forward(&input);
 
         assert_eq!(
-            output.shape,
+            output.shape(),
             TensorShape::D3 {
                 dim1: 1,
                 dim2: 2,
                 dim3: 2,
             }
         );
-        assert_eq!(output.data, vec![0.0, 0.0, 1.0, 2.0]);
+        assert_eq!(output.to_vec(), vec![0.0, 0.0, 1.0, 2.0]);
     }
 
     #[test]

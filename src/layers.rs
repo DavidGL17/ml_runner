@@ -73,7 +73,7 @@ mod tests {
         let input = Tensor::new(vec![0.5], TensorShape::Flat(1));
         let output = layer.forward(&input);
         // (0.5 * 2.0) + 1.0 = 2.0
-        assert_eq!(output.data, vec![2.0]);
+        assert_eq!(output.to_vec(), vec![2.0]);
     }
 
     #[test]
@@ -85,7 +85,7 @@ mod tests {
         let input = Tensor::new(vec![0.0], TensorShape::Flat(1));
         let output = layer.forward(&input);
         // Sigmoid(0) = 0.5
-        assert_eq!(output.data, vec![0.5]);
+        assert_eq!(output.to_vec(), vec![0.5]);
     }
 
     #[test]
@@ -111,7 +111,7 @@ mod tests {
         let output = layer.forward(&input);
 
         assert_eq!(
-            output.shape,
+            output.shape(),
             TensorShape::D3 {
                 dim1: 1,
                 dim2: 1,
@@ -119,7 +119,7 @@ mod tests {
             }
         );
         // (1+2+3+4) + bias(1.0) = 11.0
-        assert_eq!(output.data, vec![11.0]);
+        assert_eq!(output.to_vec(), vec![11.0]);
     }
 
     #[test]
@@ -135,7 +135,7 @@ mod tests {
         let input = Tensor::new(vec![1.0, 2.0, 3.0, 4.0], layer.input_shape());
         let output = layer.forward(&input);
 
-        assert_eq!(output.shape, TensorShape::Flat(4));
-        assert_eq!(output.data, vec![1.0, 2.0, 3.0, 4.0]);
+        assert_eq!(output.shape(), TensorShape::Flat(4));
+        assert_eq!(output.to_vec(), vec![1.0, 2.0, 3.0, 4.0]);
     }
 }

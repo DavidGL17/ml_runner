@@ -19,22 +19,20 @@ impl FlattenLayer {
 
     pub fn forward(&self, input: &Tensor) -> Tensor {
         assert_eq!(
-            input.shape,
+            input.shape(),
             self.input_shape(),
-            "Shape mismatch in DenseLayer: expected {:?}, got {:?}",
+            "Shape mismatch in FlattenLayer: expected {:?}, got {:?}",
             self.input_shape(),
-            input.shape
+            input.shape()
         );
 
-        let flatten_size = self.output_shape().total_size();
+        let flat = input
+            .data
+            .clone()
+            .into_shape_with_order(self.output_shape().dims())
+            .expect("FlattenLayer: total element count changed during reshape");
 
-        let mut output = vec![0.0; flatten_size];
-
-        for i in 0..flatten_size {
-            output[i] = input.data[i];
-        }
-
-        Tensor::new(output, self.output_shape())
+        Tensor::from_array(flat)
     }
 }
 
@@ -95,9 +93,9 @@ mod tests {
 
         let output = layer.forward(&input);
 
-        assert_eq!(output.shape, TensorShape::Flat(12));
+        assert_eq!(output.shape(), TensorShape::Flat(12));
         assert_eq!(
-            output.data,
+            output.to_vec(),
             vec![
                 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0
             ]
@@ -114,8 +112,8 @@ mod tests {
         let input = Tensor::new(vec![1.0, 2.0, 3.0, 4.0], layer.input_shape());
         let output = layer.forward(&input);
 
-        assert_eq!(output.shape, TensorShape::Flat(4));
-        assert_eq!(output.data, vec![1.0, 2.0, 3.0, 4.0]);
+        assert_eq!(output.shape(), TensorShape::Flat(4));
+        assert_eq!(output.to_vec(), vec![1.0, 2.0, 3.0, 4.0]);
     }
 
     #[test]

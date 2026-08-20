@@ -16,7 +16,7 @@ fn run_activation_all_types_model() {
 
     // Verify the result
     assert_abs_diff_eq!(
-        FloatVec(model_output.data),
+        FloatVec(model_output.to_vec()),
         FloatVec(fixture_input.test_output),
         epsilon = 1e-4
     );

@@ -94,8 +94,10 @@ fn fmt_ns(ns: f64) -> String {
 fn backend_name() -> &'static str {
     if cfg!(feature = "simd") {
         "simd (wide)"
+    } else if cfg!(feature = "blas") {
+        "ndarray (BLAS)"
     } else {
-        "scalar"
+        "ndarray (matrixmultiply)"
     }
 }
 

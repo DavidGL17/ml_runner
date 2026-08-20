@@ -47,16 +47,21 @@ impl Model {
     }
 
     pub fn forward(&self, input: &Tensor) -> Result<Tensor, String> {
-        assert_eq!(input.shape, self.input_shape, "Model input shape mismatch");
+        assert_eq!(
+            input.shape(),
+            self.input_shape,
+            "Model input shape mismatch"
+        );
 
-        let mut current = Tensor::new(input.data.clone(), input.shape.clone());
+        let mut current = Tensor::from_array(input.data.clone());
 
         for layer in &self.layers {
             current = layer.forward(&current);
         }
 
         assert_eq!(
-            current.shape, self.output_shape,
+            current.shape(),
+            self.output_shape,
             "Model output shape mismatch"
         );
 
@@ -120,7 +125,7 @@ mod tests {
         let output = model.forward(&input).unwrap();
         // Layer 1: [0.5*1 + 0.5*1, 0.5*1 + 0.5*1] = [1.0, 1.0]
         // Layer 2: [1.0*1 + 1.0*1 + 0.5] = [2.5]
-        assert_eq!(output.data, vec![2.5]);
+        assert_eq!(output.to_vec(), vec![2.5]);
     }
 
     #[test]
@@ -158,7 +163,7 @@ mod tests {
         // Layer 1: [0.5*1 + 0.5*1, 0.5*1 + 0.5*1] = [1.0, 1.0]
         // Layer 2 (ReLU): [1.0, 1.0] (no change since values are positive)
         // Layer 3: [1.0*1 + 1.0*1 + 0.5] = [2.5]
-        assert_eq!(output.data, vec![2.5]);
+        assert_eq!(output.to_vec(), vec![2.5]);
     }
 
     /// Model whose input is D3 (a Conv2D layer first), goes through Flatten,
@@ -204,7 +209,7 @@ mod tests {
         let output = model.forward(&input).unwrap();
         // conv2d sums the whole 2x2 window with an all-ones kernel: 1+2+3+4 = 10
         // flatten is then a no-op on the data
-        assert_eq!(output.data, vec![10.0]);
+        assert_eq!(output.to_vec(), vec![10.0]);
     }
 
     #[test]

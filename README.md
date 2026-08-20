@@ -11,21 +11,21 @@ A small library that aims to provide a fast and device agnostic way of running p
 
 ### Supported layers
 
-|  layer  | simple forward | simd  |
-| :-----: | :------------: | :---: |
-| Conv2D  |      yes       |  no   |
-| Flatten |      yes       |  no   |
-| Linear  |      yes       |  yes  |
+|  layer  | simple forward | BLAS  | simd  |
+| :-----: | :------------: | :---: | :---: |
+| Linear  |      yes       |  yes  |  yes  |
+| Conv2D  |      yes       |  yes  |  no   |
+| Flatten |      yes       |  yes  |  no   |
 
 ### Supported activation functions
 
-| function | simple application | simd  |
-| :------: | :----------------: | :---: |
-|   ReLU   |        yes         |  no   |
-| Sigmoid  |        yes         |  no   |
-|   Tanh   |        yes         |  no   |
-| Softmax  |        yes         |  no   |
-|  Linear  |        yes         |  no   |
+| function | simple application | BLAS  | simd  |
+| :------: | :----------------: | :---: | :---: |
+|   ReLU   |        yes         |  yes  |  no   |
+| Sigmoid  |        yes         |  yes  |  no   |
+|   Tanh   |        yes         |  yes  |  no   |
+| Softmax  |        yes         |  yes  |  no   |
+|  Linear  |        yes         |  yes  |  no   |
 
 ## Usage
 
@@ -79,6 +79,7 @@ To run the library, you can use one of the following targets :
 
 - `cargo run` to run the default target (no optimization)
 - `cargo run --features simd` to run with SIMD optimizations (requires `wide` crate)
+- `cargo run --features blas` to run with BLAS optimizations (requires specific software depending on your OS)
 - To compile in release mode, use `cargo run -r` (add the feature you want after) 
 
 #### Testing

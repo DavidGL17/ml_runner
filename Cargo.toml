@@ -1,24 +1,34 @@
 [package]
 name = "ml_runner"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0"
+ndarray = { version = "0.16", features = ["serde"] }
 wide = { version = "0.7", optional = true }
 
+# Only pulled in when the `blas` feature is enabled - see below.
+blas-src = { version = "0.10", optional = true, default-features = false, features = ["openblas"] }
+openblas-src = { version = "0.10", optional = true, default-features = false, features = ["system", "cblas"] }
+
 [features]
-# Default backend if nothing is specified: portable scalar code, works everywhere
-# including no_std-friendly microcontrollers (once the crate is adapted for no_std).
-default = ["scalar"]
+default = []
 
-# Plain, dependency-free loops. Always compiled in as the fallback path.
-scalar = []
-
-# SIMD-accelerated backend using the `wide` crate (portable SIMD, works on
-# stable Rust). Enable with: cargo build --features simd
+# Dependency-light SIMD backend for DenseLayer, via the `wide` crate 
+# (portable SIMD on stable Rust - SSE/AVX on x86_64, NEON on aarch64, etc., chosen at compile time from target features, no runtime detection). 
+# Bypasses ndarray's `.dot()` entirely, so nothing needs to be linked at build time - this is the option for embedded/microcontroller targets that support SIMD instructions but have no BLAS port available. Enable with: cargo build --features simd
 simd = ["dep:wide"]
+
+# Routes ndarray's `.dot()` (used by DenseLayer) through a system BLAS library instead of ndarray's built-in matrixmultiply crate. 
+# Fastest option on desktop/server hardware, but requires a BLAS implementation to be discoverable at link time - on Debian/Ubuntu: `apt install libopenblas-dev pkg-config`. 
+# Not generally suitable for microcontroller targets, which won't have a BLAS port; use `simd` there instead. 
+# If both `simd` and `blas` are enabled, `simd` wins. Enable with: cargo build --release --features blas
+blas = ["ndarray/blas", "dep:blas-src", "dep:openblas-src"]
 
 [dev-dependencies]
 approx = "0.5.1"
+
+[build-dependencies]
+pkg-config = "0.3"

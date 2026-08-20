@@ -42,11 +42,11 @@ impl Conv2DLayer {
 
     pub fn forward(&self, input: &Tensor) -> Tensor {
         assert_eq!(
-            input.shape,
+            input.shape(),
             self.input_shape(),
-            "Shape mismatch in DenseLayer: expected {:?}, got {:?}",
+            "Shape mismatch in Conv2DLayer: expected {:?}, got {:?}",
             self.input_shape(),
-            input.shape
+            input.shape()
         );
 
         let out_shape = self.output_shape();
@@ -87,7 +87,7 @@ impl Conv2DLayer {
                                     + iw as usize;
                                 let w_idx = self.weight_idx(oc, ic, kh as usize, kw as usize);
 
-                                acc += input.data[in_idx] * self.weights[w_idx];
+                                acc += input.data.as_slice().unwrap()[in_idx] * self.weights[w_idx];
                             }
                         }
                     }
@@ -157,7 +157,7 @@ mod tests {
         let output = layer.forward(&input);
 
         assert_eq!(
-            output.shape,
+            output.shape(),
             TensorShape::D3 {
                 dim1: 1,
                 dim2: 2,
@@ -165,7 +165,7 @@ mod tests {
             }
         );
         // window sums: [1+2+4+5, 2+3+5+6, 4+5+7+8, 5+6+8+9]
-        assert_eq!(output.data, vec![12.0, 16.0, 24.0, 28.0]);
+        assert_eq!(output.to_vec(), vec![12.0, 16.0, 24.0, 28.0]);
     }
 
     #[test]
@@ -194,7 +194,7 @@ mod tests {
 
         let output = layer.forward(&input);
 
-        assert_eq!(output.data, vec![22.0, 26.0, 34.0, 38.0]);
+        assert_eq!(output.to_vec(), vec![22.0, 26.0, 34.0, 38.0]);
     }
 
     #[test]
@@ -224,7 +224,7 @@ mod tests {
         let output = layer.forward(&input);
 
         assert_eq!(
-            output.shape,
+            output.shape(),
             TensorShape::D3 {
                 dim1: 1,
                 dim2: 3,
@@ -237,7 +237,7 @@ mod tests {
             27.0, 45.0, 33.0,
             24.0, 39.0, 28.0,
         ];
-        assert_eq!(output.data, expected);
+        assert_eq!(output.to_vec(), expected);
     }
 
     #[test]
@@ -268,14 +268,14 @@ mod tests {
         let output = layer.forward(&input);
 
         assert_eq!(
-            output.shape,
+            output.shape(),
             TensorShape::D3 {
                 dim1: 1,
                 dim2: 2,
                 dim3: 2,
             }
         );
-        assert_eq!(output.data, vec![14.0, 22.0, 46.0, 54.0]);
+        assert_eq!(output.to_vec(), vec![14.0, 22.0, 46.0, 54.0]);
     }
 
     #[test]
@@ -308,7 +308,7 @@ mod tests {
         let output = layer.forward(&input);
 
         // out[h][w] = bias + in0[h][w]*2 + in1[h][w]*3
-        assert_eq!(output.data, vec![18.0, 23.0, 28.0, 33.0]);
+        assert_eq!(output.to_vec(), vec![18.0, 23.0, 28.0, 33.0]);
     }
 
     #[test]
@@ -337,7 +337,7 @@ mod tests {
         let output = layer.forward(&input);
 
         assert_eq!(
-            output.shape,
+            output.shape(),
             TensorShape::D3 {
                 dim1: 2,
                 dim2: 2,
@@ -347,7 +347,7 @@ mod tests {
         // channel 0: input * 5
         // channel 1: input * 10 + 100
         assert_eq!(
-            output.data,
+            output.to_vec(),
             vec![5.0, 10.0, 15.0, 20.0, 110.0, 120.0, 130.0, 140.0]
         );
     }

@@ -1,17 +1,23 @@
-//! SIMD-accelerated implementation of the dense-layer forward pass.
-//!
-//! Uses the `wide` crate, which picks portable SIMD instructions (SSE/AVX on
+//! SIMD-accelerated forward-pass implementation for `DenseLayer`, via the
+//! `wide` crate, which picks portable SIMD instructions (SSE/AVX on
 //! x86_64, NEON on aarch64, etc.) at compile time based on the build's
 //! target features - no runtime CPU detection involved. Only compiled in
 //! when the `simd` Cargo feature is enabled.
+//!
+//! Unlike the default backend (`dense/scalar.rs`), this doesn't route
+//! through `ndarray`'s `.dot()`/BLAS at all, so nothing needs to be linked
+//! at build time - this is the option for embedded/microcontroller
+//! targets that support SIMD instructions but have no BLAS port available.
 
+use super::DenseLayer;
+use crate::tensor::Tensor;
 use wide::f32x8;
 
 const LANES: usize = 8;
 
 /// Computes `out = weights * input + bias` for a fully connected layer,
 /// processing 8 elements of each dot product at a time.
-pub fn dense_forward(
+fn dense_forward(
     input: &[f32],
     weights: &[f32],
     bias: &[f32],
@@ -47,12 +53,42 @@ pub fn dense_forward(
     }
 }
 
+impl DenseLayer {
+    pub fn forward(&self, input: &Tensor) -> Tensor {
+        assert_eq!(
+            input.shape(),
+            self.input_shape(),
+            "Shape mismatch in DenseLayer: expected {:?}, got {:?}",
+            self.input_shape(),
+            input.shape()
+        );
+
+        let input_slice = input
+            .data
+            .as_slice()
+            .expect("DenseLayer input must be a contiguous 1-D tensor");
+
+        let mut output = vec![0.0; self.output_size];
+        dense_forward(
+            input_slice,
+            &self.weights,
+            &self.bias,
+            self.input_size,
+            self.output_size,
+            &mut output,
+        );
+
+        Tensor::new(output, self.output_shape())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tensor::TensorShape;
 
     #[test]
-    fn matches_scalar_output_small() {
+    fn matches_expected_output_small() {
         let input = vec![1.0, 2.0];
         let weights = vec![0.5, 0.5];
         let bias = vec![0.1];
@@ -62,7 +98,7 @@ mod tests {
     }
 
     #[test]
-    fn matches_scalar_output_wider_than_one_simd_register() {
+    fn matches_expected_output_wider_than_one_simd_register() {
         // input_size = 10 exercises both the SIMD chunk (8 lanes) and the
         // scalar tail (2 leftover elements).
         let input: Vec<f32> = (1..=10).map(|x| x as f32).collect();
@@ -72,5 +108,47 @@ mod tests {
         dense_forward(&input, &weights, &bias, 10, 1, &mut out);
         let expected: f32 = input.iter().sum();
         assert_eq!(out, vec![expected]);
+    }
+
+    #[test]
+    fn test_dense_layer_forward() {
+        let layer = DenseLayer {
+            input_size: 2,
+            output_size: 1,
+            weights: vec![0.5, 0.5],
+            bias: vec![0.1],
+        };
+        let input = Tensor::new(vec![1.0, 2.0], TensorShape::Flat(2));
+        let output = layer.forward(&input);
+        // (1.0 * 0.5) + (2.0 * 0.5) + 0.1 = 1.6
+        assert_eq!(output.to_vec(), vec![1.6]);
+        assert_eq!(output.shape(), TensorShape::Flat(1));
+    }
+
+    #[test]
+    fn test_dense_layer_forward_multi_output() {
+        let layer = DenseLayer {
+            input_size: 2,
+            output_size: 2,
+            // row 0: [1.0, 0.0], row 1: [0.0, 1.0] -> identity-ish
+            weights: vec![1.0, 0.0, 0.0, 1.0],
+            bias: vec![0.0, 100.0],
+        };
+        let input = Tensor::new(vec![3.0, 4.0], TensorShape::Flat(2));
+        let output = layer.forward(&input);
+        assert_eq!(output.to_vec(), vec![3.0, 104.0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Shape mismatch in DenseLayer")]
+    fn test_dense_layer_wrong_input_shape() {
+        let layer = DenseLayer {
+            input_size: 2,
+            output_size: 1,
+            weights: vec![0.5, 0.5],
+            bias: vec![0.1],
+        };
+        let input = Tensor::new(vec![1.0], TensorShape::Flat(1));
+        let _ = layer.forward(&input);
     }
 }
