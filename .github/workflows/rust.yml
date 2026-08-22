@@ -8,6 +8,9 @@ jobs:
         FEATURE: [default, simd, blas]
     steps:
       - uses: actions/checkout@v6
+      - name: Install dependencies for blas
+        if: matrix.FEATURE == 'blas'
+        run: sudo apt install -y libopenblas-dev pkg-config
       - name: Build binaries in "${{ matrix.FEATURE }}" mode
         run: cargo build -F ${{ matrix.FEATURE }}
       - name: Run tests in "${{ matrix.FEATURE }}" mode
