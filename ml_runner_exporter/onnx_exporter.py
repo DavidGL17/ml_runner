@@ -5,6 +5,7 @@ from ml_runner_exporter.layers.activation import ActivationLayerParser
 from ml_runner_exporter.layers.conv import Conv2DLayerParser
 from ml_runner_exporter.layers.flatten import FlattenLayerParser
 from ml_runner_exporter.layers.linear import LinearLayerParser
+from ml_runner_exporter.layers.rnn import RNNLayerParser, GRULayerParser
 from ml_runner_exporter.utils import onnx_shape_to_tensor_shape
 from .model import export_model
 from .layer import LayerParser
@@ -35,7 +36,7 @@ def export_onnx(model_path: str) -> dict:
         shape = [d.dim_value for d in info.type.tensor_type.shape.dim]
         tensor_shapes[info.name] = tuple(shape)
 
-    # --- Build a weights lookup for quick access (for Gemm/MatMul/Conv) ---
+    # --- Build a weights lookup for quick access (for Gemm/MatMul/Conv/RNN/GRU) ---
     weights = {init.name: numpy_helper.to_array(init) for init in graph.initializer}
 
     # Get in and out shape for model
@@ -66,6 +67,10 @@ def export_onnx(model_path: str) -> dict:
             layer = FlattenLayerParser.flatten_layer_from_onnx(node, tensor_shapes, weights)
         elif node.op_type in ["Relu", "Sigmoid", "Tanh", "Softmax"]:
             layer = ActivationLayerParser.activation_layer_from_onnx(node, tensor_shapes)
+        elif node.op_type == "RNN":
+            layer = RNNLayerParser.rnn_layer_from_onnx(node, tensor_shapes, weights)
+        elif node.op_type == "GRU":
+            layer = GRULayerParser.gru_layer_from_onnx(node, tensor_shapes, weights)
         else:
             raise ValueError(f"Unsupported layer type: {node.op_type}")
 
