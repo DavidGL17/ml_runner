@@ -9,17 +9,37 @@ A small library that aims to provide a fast and device agnostic way of running p
   - ONNX models
 - A rust library to run the exported models on any platforms, with optimized functions depending on the platforms toolset
 
-### Supported layers
+### Supported layers in python library
 
-|  layer  | simple forward | BLAS  | simd  |
-| :-----: | :------------: | :---: | :---: |
-| Linear  |      yes       |  yes  |  yes  |
-| Conv2D  |      yes       |  yes  |  no   |
-| Flatten |      yes       |  yes  |  no   |
-|   RNN   |      yes       |  yes  |  no   |
-|   GRU   |      yes       |  yes  |  no   |
+|  layer  | ONNX support |
+| :-----: | :----------: |
+| Linear  |     yes      |
+| Conv2D  |     yes      |
+| Flatten |     yes      |
+|   RNN   |     yes      |
+|   GRU   |     yes      |
 
-### Supported activation functions
+#### Supported activation functions
+
+| function | ONNX support |
+| :------: | :----------: |
+|   ReLU   |     yes      |
+| Sigmoid  |     yes      |
+|   Tanh   |     yes      |
+| Softmax  |     yes      |
+|  Linear  |     yes      |
+
+### Supported layers in Rust library
+
+|  layer  | simple forward | BLAS  | simd  |            comment             |
+| :-----: | :------------: | :---: | :---: | :----------------------------: |
+| Linear  |      yes       |  yes  |  yes  |                                |
+| Conv2D  |      yes       |  yes  |  no   |                                |
+| Flatten |      yes       |  yes  |  no   |                                |
+|   RNN   |      yes       |  yes  |  no   | Implemented but not tested yet |
+|   GRU   |      yes       |  yes  |  no   | Implemented but not tested yet |
+
+#### Supported activation functions
 
 | function | simple application | BLAS  | simd  |
 | :------: | :----------------: | :---: | :---: |
@@ -92,8 +112,10 @@ To run the tests, you can use `cargo test --all-features` to run all tests
 
 These are the next features that I would like to implement, in no specific order
 
-- Add activation functions support in simd
-- Add support for more layer types (Conv, etc.)
-- Export both the python library and rust library to pip/crates.io for easier usage
-- Add support for non linear models (meaning models that are not just a simple chaining of layers but that have multiple paths and potentially multiple inputs/outputs)
-- Add support to other optimization backends (cuda, ...)
+- [ ] Add activation functions support in simd
+- [ ] Implement parser for pytorch and tensorflow models
+- [ ] Export both the python library and rust library to pip/crates.io for easier usage
+- [ ] Add support for non linear models (meaning models that are not just a simple chaining of layers but that have multiple paths and potentially multiple inputs/outputs)
+- [ ] Add support to other optimization backends (cuda, ...)
+- [ ] Add support for non float models (right now only float is supported, we should allow export and run of models in int)
+- [ ] Add support for more layer types

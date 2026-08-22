@@ -1,7 +1,7 @@
 on: push
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -12,3 +12,19 @@ jobs:
         run: cargo build --profile ${{ matrix.FEATURE }}
       - name: Run tests in "${{ matrix.FEATURE }}" mode
         run: cargo test --profile ${{ matrix.FEATURE }}
+
+
+  # publish:
+  #   needs: test
+  #   if: github.ref == 'refs/heads/release'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - name: Login into crates.io
+  #       run: cargo login ${{ secrets.CRATES_IO }}
+  #     - name: Build binaries in "release" mode
+  #       run: cargo build -r
+  #     - name: "Package for crates.io"
+  #       run: cargo package # verification step before publishing
+  #     - name: "Publish to crates.io"
+  #       run: cargo publish
