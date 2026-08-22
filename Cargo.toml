@@ -2,6 +2,11 @@
 name = "ml_runner"
 version = "1.0.0"
 edition = "2024"
+license-file = "LICENSE"
+description = "A Rust crate for running machine learning models, with optional SIMD and BLAS support."
+homepage = "https://github.com/DavidGL17/ml_runner"
+repository = "https://github.com/DavidGL17/ml_runner"
+readme = "README.md" 
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }

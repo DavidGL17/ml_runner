@@ -106,8 +106,8 @@ impl RNNLayer {
         for t in 0..self.seq_len {
             let x_t = input_seq.row(t);
 
-            let mut z = weights_ih.dot(&x_t) + &bias_ih;
-            z = z + weights_hh.dot(&hidden) + &bias_hh;
+            let mut z = weights_ih.dot(&x_t) + bias_ih;
+            z = z + weights_hh.dot(&hidden) + bias_hh;
 
             hidden = activate(&self.activation_type, z);
 
@@ -254,16 +254,16 @@ impl GRULayer {
         for t in 0..self.seq_len {
             let x_t = input_seq.row(t);
 
-            let mut r_pre = weights_ir.dot(&x_t) + &bias_ir;
-            r_pre = r_pre + weights_hr.dot(&hidden) + &bias_hr;
+            let mut r_pre = weights_ir.dot(&x_t) + bias_ir;
+            r_pre = r_pre + weights_hr.dot(&hidden) + bias_hr;
             let r = activate(&self.recurrent_activation_type, r_pre);
 
-            let mut z_pre = weights_iz.dot(&x_t) + &bias_iz;
-            z_pre = z_pre + weights_hz.dot(&hidden) + &bias_hz;
+            let mut z_pre = weights_iz.dot(&x_t) + bias_iz;
+            z_pre = z_pre + weights_hz.dot(&hidden) + bias_hz;
             let z = activate(&self.recurrent_activation_type, z_pre);
 
-            let hn_term = weights_hn.dot(&hidden) + &bias_hn;
-            let mut n_pre = weights_in.dot(&x_t) + &bias_in;
+            let hn_term = weights_hn.dot(&hidden) + bias_hn;
+            let mut n_pre = weights_in.dot(&x_t) + bias_in;
             n_pre = n_pre + &r * &hn_term;
             let n = activate(&self.activation_type, n_pre);
 

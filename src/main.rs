@@ -63,7 +63,7 @@ fn compute_stats(mut samples_ns: Vec<f64>) -> Stats {
     let min = samples_ns[0];
     let max = samples_ns[runs - 1];
     let mean = samples_ns.iter().sum::<f64>() / runs as f64;
-    let median = if runs % 2 == 0 {
+    let median = if runs.is_multiple_of(2) {
         (samples_ns[runs / 2 - 1] + samples_ns[runs / 2]) / 2.0
     } else {
         samples_ns[runs / 2]

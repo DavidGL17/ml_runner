@@ -33,7 +33,7 @@ impl DenseLayer {
             .expect("DenseLayer input is not 1-D");
 
         // weights (output_size x input_size) * input (input_size) + bias
-        let output: Array1<f32> = weights.dot(&input_vec) + &bias;
+        let output: Array1<f32> = weights.dot(&input_vec) + bias;
 
         Tensor::from_array(output.into_dyn())
     }

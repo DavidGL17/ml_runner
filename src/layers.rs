@@ -18,9 +18,9 @@ pub enum Layer {
     #[serde(rename = "flatten")]
     Flatten(FlattenLayer),
     #[serde(rename = "rnn")]
-    RNN(RNNLayer),
+    Rnn(RNNLayer),
     #[serde(rename = "gru")]
-    GRU(GRULayer),
+    Gru(GRULayer),
 }
 
 impl Layer {
@@ -33,8 +33,8 @@ impl Layer {
             Layer::Activation(layer) => layer.input_shape(),
             Layer::Conv2D(layer) => layer.input_shape(),
             Layer::Flatten(layer) => layer.input_shape(),
-            Layer::RNN(layer) => layer.input_shape(),
-            Layer::GRU(layer) => layer.input_shape(),
+            Layer::Rnn(layer) => layer.input_shape(),
+            Layer::Gru(layer) => layer.input_shape(),
         }
     }
 
@@ -45,8 +45,8 @@ impl Layer {
             Layer::Activation(layer) => layer.output_shape(),
             Layer::Conv2D(layer) => layer.output_shape(),
             Layer::Flatten(layer) => layer.output_shape(),
-            Layer::RNN(layer) => layer.output_shape(),
-            Layer::GRU(layer) => layer.output_shape(),
+            Layer::Rnn(layer) => layer.output_shape(),
+            Layer::Gru(layer) => layer.output_shape(),
         }
     }
 
@@ -56,8 +56,8 @@ impl Layer {
             Layer::Activation(layer) => layer.forward(input),
             Layer::Conv2D(layer) => layer.forward(input),
             Layer::Flatten(layer) => layer.forward(input),
-            Layer::RNN(layer) => layer.forward(input),
-            Layer::GRU(layer) => layer.forward(input),
+            Layer::Rnn(layer) => layer.forward(input),
+            Layer::Gru(layer) => layer.forward(input),
         }
     }
 }
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn test_rnn_layer_enum_dispatch() {
-        let layer = Layer::RNN(RNNLayer {
+        let layer = Layer::Rnn(RNNLayer {
             seq_len: 1,
             input_size: 2,
             hidden_size: 1,
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn test_gru_layer_enum_dispatch() {
-        let layer = Layer::GRU(GRULayer {
+        let layer = Layer::Gru(GRULayer {
             seq_len: 1,
             input_size: 1,
             hidden_size: 1,
