@@ -16,6 +16,8 @@ A small library that aims to provide a fast and device agnostic way of running p
 | Linear  |      yes       |  yes  |  yes  |
 | Conv2D  |      yes       |  yes  |  no   |
 | Flatten |      yes       |  yes  |  no   |
+|   RNN   |      yes       |  yes  |  no   |
+|   GRU   |      yes       |  yes  |  no   |
 
 ### Supported activation functions
 

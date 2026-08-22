@@ -1,4 +1,5 @@
 use crate::tensor::{Tensor, TensorShape};
+use ndarray::{Array3, ArrayView1, ArrayView3, ArrayView4, Ix3};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -33,13 +34,6 @@ impl Conv2DLayer {
         }
     }
 
-    /// Index into `weights` for (out_channel, in_channel, kh, kw).
-    #[inline]
-    fn weight_idx(&self, oc: usize, ic: usize, kh: usize, kw: usize) -> usize {
-        let k = self.kernel_size;
-        ((oc * self.input_channels + ic) * k + kh) * k + kw
-    }
-
     pub fn forward(&self, input: &Tensor) -> Tensor {
         assert_eq!(
             input.shape(),
@@ -51,54 +45,66 @@ impl Conv2DLayer {
 
         let out_shape = self.output_shape();
         let (out_h, out_w) = match out_shape {
-            TensorShape::D3 { dim2: height, dim3: width, .. } => (height, width),
+            TensorShape::D3 {
+                dim2: height,
+                dim3: width,
+                ..
+            } => (height, width),
             _ => unreachable!(),
         };
 
-        let mut out_data = vec![0.0f32; self.output_channels * out_h * out_w];
+        let k = self.kernel_size;
+        let weights = ArrayView4::from_shape(
+            (self.output_channels, self.input_channels, k, k),
+            &self.weights,
+        )
+        .expect(
+            "Conv2DLayer weights length doesn't match output_channels * input_channels * kernel_size^2",
+        );
+        let bias = ArrayView1::from(&self.bias);
+        let input_view: ArrayView3<f32> = input
+            .data
+            .view()
+            .into_dimensionality::<Ix3>()
+            .expect("Conv2DLayer input is not 3-D");
 
-        let k = self.kernel_size as isize;
+        let mut output = Array3::<f32>::zeros((self.output_channels, out_h, out_w));
+
+        let k_i = k as isize;
         let pad = self.padding as isize;
         let stride = self.stride as isize;
         let in_h = self.height as isize;
         let in_w = self.width as isize;
 
         for oc in 0..self.output_channels {
-            let out_idx_c = oc * (out_h * out_w);
             for oh in 0..out_h {
-                let out_idx_h = out_idx_c + oh * out_w;
                 for ow in 0..out_w {
-                    let mut acc = self.bias[oc];
+                    let mut acc = bias[oc];
 
                     for ic in 0..self.input_channels {
-                        for kh in 0..k {
+                        for kh in 0..k_i {
                             let ih = oh as isize * stride + kh - pad;
                             if ih < 0 || ih >= in_h {
                                 continue;
                             }
-                            for kw in 0..k {
+                            for kw in 0..k_i {
                                 let iw = ow as isize * stride + kw - pad;
                                 if iw < 0 || iw >= in_w {
                                     continue;
                                 }
 
-                                let in_idx = ic * (self.height * self.width)
-                                    + ih as usize * self.width
-                                    + iw as usize;
-                                let w_idx = self.weight_idx(oc, ic, kh as usize, kw as usize);
-
-                                acc += input.data.as_slice().unwrap()[in_idx] * self.weights[w_idx];
+                                acc += input_view[[ic, ih as usize, iw as usize]]
+                                    * weights[[oc, ic, kh as usize, kw as usize]];
                             }
                         }
                     }
 
-                    let out_idx = out_idx_h + ow;
-                    out_data[out_idx] = acc;
+                    output[[oc, oh, ow]] = acc;
                 }
             }
         }
 
-        Tensor::new(out_data, out_shape)
+        Tensor::from_array(output.into_dyn())
     }
 }
 

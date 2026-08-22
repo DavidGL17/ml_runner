@@ -2,7 +2,7 @@ use crate::activation::ActivationLayer;
 use crate::conv::Conv2DLayer;
 use crate::dense::DenseLayer;
 use crate::flatten::FlattenLayer;
-use crate::rnn::RNNLayer;
+use crate::rnn::{GRULayer, RNNLayer};
 use crate::tensor::{Tensor, TensorShape};
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +19,8 @@ pub enum Layer {
     Flatten(FlattenLayer),
     #[serde(rename = "rnn")]
     RNN(RNNLayer),
+    #[serde(rename = "gru")]
+    GRU(GRULayer),
 }
 
 impl Layer {
@@ -32,6 +34,7 @@ impl Layer {
             Layer::Conv2D(layer) => layer.input_shape(),
             Layer::Flatten(layer) => layer.input_shape(),
             Layer::RNN(layer) => layer.input_shape(),
+            Layer::GRU(layer) => layer.input_shape(),
         }
     }
 
@@ -43,6 +46,7 @@ impl Layer {
             Layer::Conv2D(layer) => layer.output_shape(),
             Layer::Flatten(layer) => layer.output_shape(),
             Layer::RNN(layer) => layer.output_shape(),
+            Layer::GRU(layer) => layer.output_shape(),
         }
     }
 
@@ -53,6 +57,7 @@ impl Layer {
             Layer::Conv2D(layer) => layer.forward(input),
             Layer::Flatten(layer) => layer.forward(input),
             Layer::RNN(layer) => layer.forward(input),
+            Layer::GRU(layer) => layer.forward(input),
         }
     }
 }
@@ -137,5 +142,62 @@ mod tests {
 
         assert_eq!(output.shape(), TensorShape::Flat(4));
         assert_eq!(output.to_vec(), vec![1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn test_rnn_layer_enum_dispatch() {
+        let layer = Layer::RNN(RNNLayer {
+            seq_len: 1,
+            input_size: 2,
+            hidden_size: 1,
+            weights_ih: vec![1.0, 1.0],
+            weights_hh: vec![0.0],
+            bias_ih: vec![0.0],
+            bias_hh: vec![0.0],
+            activation_type: ActivationType::Linear,
+            return_sequences: false,
+        });
+
+        let input = Tensor::new(vec![1.0, 2.0], layer.input_shape());
+        let output = layer.forward(&input);
+
+        // seq_len = 1 means the hidden-to-hidden term is multiplied by the
+        // zero initial state, so this reduces to a single Dense-like step:
+        // 1*1 + 1*2 + 0 = 3.0
+        assert_eq!(output.shape(), TensorShape::Flat(1));
+        assert_eq!(output.to_vec(), vec![3.0]);
+    }
+
+    #[test]
+    fn test_gru_layer_enum_dispatch() {
+        let layer = Layer::GRU(GRULayer {
+            seq_len: 1,
+            input_size: 1,
+            hidden_size: 1,
+            weights_ir: vec![0.0],
+            weights_hr: vec![0.0],
+            bias_ir: vec![0.0],
+            bias_hr: vec![0.0],
+            weights_iz: vec![0.0],
+            weights_hz: vec![0.0],
+            bias_iz: vec![0.0],
+            bias_hz: vec![0.0],
+            weights_in: vec![1.0],
+            weights_hn: vec![0.0],
+            bias_in: vec![0.0],
+            bias_hn: vec![0.0],
+            recurrent_activation_type: ActivationType::Sigmoid,
+            activation_type: ActivationType::Tanh,
+            return_sequences: false,
+        });
+
+        let input = Tensor::new(vec![2.0], layer.input_shape());
+        let output = layer.forward(&input);
+
+        // r = sigmoid(0) = 0.5, z = sigmoid(0) = 0.5, hn_term = 0
+        // n = tanh(1*2.0 + 0.5*0) = tanh(2.0)
+        // h_1 = (1 - 0.5)*tanh(2.0) + 0.5*0 = 0.5*tanh(2.0)
+        assert_eq!(output.shape(), TensorShape::Flat(1));
+        assert_eq!(output.to_vec(), vec![0.5 * 2.0f32.tanh()]);
     }
 }

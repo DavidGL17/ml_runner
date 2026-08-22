@@ -1,6 +1,3 @@
 mod layer;
 
-pub use layer::ActivationLayer;
-
-#[cfg(test)]
-pub use layer::ActivationType;
+pub use layer::{ActivationLayer, ActivationType};

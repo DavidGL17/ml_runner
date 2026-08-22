@@ -1,3 +1,3 @@
 mod layer;
 
-pub use layer::RNNLayer;
+pub use layer::{GRULayer, RNNLayer};
