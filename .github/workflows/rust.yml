@@ -9,9 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Build binaries in "${{ matrix.FEATURE }}" mode
-        run: cargo build --profile ${{ matrix.FEATURE }}
+        run: cargo build -F ${{ matrix.FEATURE }}
       - name: Run tests in "${{ matrix.FEATURE }}" mode
-        run: cargo test --profile ${{ matrix.FEATURE }}
+        run: cargo test -F ${{ matrix.FEATURE }}
 
 
   # publish:
