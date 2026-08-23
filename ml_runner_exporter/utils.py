@@ -10,15 +10,14 @@ def onnx_shape_to_tensor_shape(shape: tuple) -> dict:
 
     if len(dims) == 1:
         return {"Flat": dims[0]}
-    elif len(dims) == 2:
+    if len(dims) == 2:
         dim1, dim2 = dims
         return {"D2": {"dim1": dim1, "dim2": dim2}}
-    elif len(dims) == 3:
+    if len(dims) == 3:
         dim1, dim2, dim3 = dims
         return {"D3": {"dim1": dim1, "dim2": dim2, "dim3": dim3}}
-    else:
-        raise ValueError(
-            f"Unsupported model input/output shape {shape}: expected a single "
-            "feature dim (N, F), a D2 dim (N, D1, D2), or a D3 dim "
-            "(N, D1, D2, D3) after the batch dimension"
-        )
+    m = (
+        "Unsupported model input/output shape {shape}: expected a single dim (N, F), "
+        "a D2 dim (N, D1, D2), or a D3 dim (N, D1, D2, D3) after the batch dimension"
+    )
+    raise ValueError(m)

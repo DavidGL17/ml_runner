@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 import onnx
 from onnx import numpy_helper, shape_inference
 
@@ -5,10 +7,12 @@ from ml_runner_exporter.layers.activation import ActivationLayerParser
 from ml_runner_exporter.layers.conv import Conv2DLayerParser
 from ml_runner_exporter.layers.flatten import FlattenLayerParser
 from ml_runner_exporter.layers.linear import LinearLayerParser
-from ml_runner_exporter.layers.rnn import RNNLayerParser, GRULayerParser
+from ml_runner_exporter.layers.rnn import GRULayerParser, RNNLayerParser
+from ml_runner_exporter.model import export_model
 from ml_runner_exporter.utils import onnx_shape_to_tensor_shape
-from .model import export_model
-from .layer import LayerParser
+
+if TYPE_CHECKING:
+    from ml_runner_exporter.layer import LayerParser
 
 
 def export_onnx(model_path: str) -> dict:
@@ -52,7 +56,7 @@ def export_onnx(model_path: str) -> dict:
 
     # --- Iterate over layers (nodes) ---
     layers: list[LayerParser] = []
-    for i, node in enumerate(graph.node):
+    for node in graph.node:
         # Extract weight and bias tensors from the node's inputs
         node_weights = [weights[inp] for inp in node.input if inp in weights]
 
@@ -72,7 +76,8 @@ def export_onnx(model_path: str) -> dict:
         elif node.op_type == "GRU":
             layer = GRULayerParser.gru_layer_from_onnx(node, tensor_shapes, weights)
         else:
-            raise ValueError(f"Unsupported layer type: {node.op_type}")
+            m = f"Unsupported layer type: {node.op_type}"
+            raise ValueError(m)
 
         layers.append(layer)
 

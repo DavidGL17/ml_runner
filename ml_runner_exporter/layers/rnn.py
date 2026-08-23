@@ -19,8 +19,8 @@ class RNNLayerParser(LayerParser):
         bias_ih: list,
         bias_hh: list,
         activation_type: ActivationTypes,
-        return_sequences: bool = False,
-    ):
+        return_sequences: bool = False,  # noqa: FBT001, FBT002
+    ) -> None:
         super().__init__("rnn")
         self.seq_len = seq_len
         self.input_size = input_size
@@ -52,12 +52,12 @@ class RNNLayerParser(LayerParser):
         }
 
     @classmethod
-    def rnn_layer_from_onnx(cls, node, tensor_shapes: dict, weights: dict) -> Self:
+    def rnn_layer_from_onnx(cls, node: NodeProto, tensor_shapes: dict, weights: dict) -> Self:
         attrs = {a.name: a for a in node.attribute}
 
         direction = attrs["direction"].s.decode() if "direction" in attrs else "forward"
         if direction != "forward":
-            raise ValueError(f"RNN node {node.name} uses direction={direction!r}; only 'forward' " "(single-direction) RNNs are supported")
+            raise ValueError(f"RNN node {node.name} uses direction={direction!r}; only 'forward' (single-direction) RNNs are supported")
 
         if "hidden_size" not in attrs:
             raise ValueError(f"RNN node {node.name} is missing the required hidden_size attribute")
@@ -74,7 +74,7 @@ class RNNLayerParser(LayerParser):
         input_tensor_name = node.input[0]
         input_shape = tensor_shapes.get(input_tensor_name)
         if input_shape is None or len(input_shape) != 3:
-            raise ValueError(f"Could not determine a 3D (seq_length, batch, input_size) input shape " f"for RNN node {node.name}")
+            raise ValueError(f"Could not determine a 3D (seq_length, batch, input_size) input shape for RNN node {node.name}")
         seq_len, _batch, input_size = input_shape
 
         if len(node.input) < 3 or node.input[1] not in weights or node.input[2] not in weights:
@@ -131,8 +131,8 @@ class GRULayerParser(LayerParser):
         bias_hn: list,
         recurrent_activation_type: ActivationTypes,
         activation_type: ActivationTypes,
-        return_sequences: bool = False,
-    ):
+        return_sequences: bool = False,  # noqa: FBT001, FBT002
+    ) -> None:
         super().__init__("gru")
         self.seq_len = seq_len
         self.input_size = input_size
@@ -192,7 +192,7 @@ class GRULayerParser(LayerParser):
 
         direction = attrs["direction"].s.decode() if "direction" in attrs else "forward"
         if direction != "forward":
-            raise ValueError(f"GRU node {node.name} uses direction={direction!r}; only 'forward' " "(single-direction) GRUs are supported")
+            raise ValueError(f"GRU node {node.name} uses direction={direction!r}; only 'forward' (single-direction) GRUs are supported")
 
         # PyTorch's nn.GRU applies the reset gate after the hidden-side linear
         # transform (ONNX's linear_before_reset=1). If a GRU was exported with
@@ -201,7 +201,7 @@ class GRULayerParser(LayerParser):
         linear_before_reset = attrs["linear_before_reset"].i if "linear_before_reset" in attrs else 0
         if linear_before_reset != 1:
             raise ValueError(
-                f"GRU node {node.name} has linear_before_reset={linear_before_reset}; only " "linear_before_reset=1 (PyTorch's GRU semantics) is supported"
+                f"GRU node {node.name} has linear_before_reset={linear_before_reset}; only linear_before_reset=1 (PyTorch's GRU semantics) is supported"
             )
 
         if "hidden_size" not in attrs:
@@ -222,7 +222,7 @@ class GRULayerParser(LayerParser):
         input_tensor_name = node.input[0]
         input_shape = tensor_shapes.get(input_tensor_name)
         if input_shape is None or len(input_shape) != 3:
-            raise ValueError(f"Could not determine a 3D (seq_length, batch, input_size) input shape " f"for GRU node {node.name}")
+            raise ValueError(f"Could not determine a 3D (seq_length, batch, input_size) input shape for GRU node {node.name}")
         seq_len, _batch, input_size = input_shape
 
         if len(node.input) < 3 or node.input[1] not in weights or node.input[2] not in weights:

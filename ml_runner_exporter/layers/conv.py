@@ -18,7 +18,7 @@ class Conv2DLayerParser(LayerParser):
         width: int,
         weights: list,
         bias: list,
-    ):
+    ) -> None:
         super().__init__("conv2d")
         self.kernel_size = kernel_size
         self.stride = stride
@@ -61,19 +61,19 @@ class Conv2DLayerParser(LayerParser):
 
         group = attrs["group"].i if "group" in attrs else 1
         if group != 1:
-            raise ValueError(f"Conv node {node.name} uses group={group}; grouped convolutions " "are not supported by the Rust Conv2DLayer")
+            raise ValueError(f"Conv node {node.name} uses group={group}; grouped convolutions are not supported by the Rust Conv2DLayer")
 
         kernel_shape = list(attrs["kernel_shape"].ints) if "kernel_shape" in attrs else list(weight_matrix.shape[2:])
         if len(set(kernel_shape)) != 1:
-            raise ValueError(f"Conv node {node.name} has a non-square kernel {kernel_shape}; " "only square kernels are supported")
+            raise ValueError(f"Conv node {node.name} has a non-square kernel {kernel_shape}; only square kernels are supported")
 
         strides = list(attrs["strides"].ints) if "strides" in attrs else [1, 1]
         if len(set(strides)) != 1:
-            raise ValueError(f"Conv node {node.name} has non-uniform strides {strides}; " "only a single stride value is supported")
+            raise ValueError(f"Conv node {node.name} has non-uniform strides {strides}; only a single stride value is supported")
 
         pads = list(attrs["pads"].ints) if "pads" in attrs else [0, 0, 0, 0]
         if len(set(pads)) != 1:
-            raise ValueError(f"Conv node {node.name} has asymmetric padding {pads}; " "only symmetric padding is supported")
+            raise ValueError(f"Conv node {node.name} has asymmetric padding {pads}; only symmetric padding is supported")
 
         input_tensor_name = node.input[0]
         input_shape = tensor_shapes.get(input_tensor_name)

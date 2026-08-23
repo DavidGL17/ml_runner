@@ -7,3 +7,4 @@ src/model_weights.h
 target
 Cargo.lock
 export.json
+dist

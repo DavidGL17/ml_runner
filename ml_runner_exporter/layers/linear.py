@@ -7,7 +7,7 @@ from ml_runner_exporter.layer import LayerParser
 
 class LinearLayerParser(LayerParser):
 
-    def __init__(self, input_size: int, output_size: int, weights: list, bias: list):
+    def __init__(self, input_size: int, output_size: int, weights: list, bias: list) -> None:
         super().__init__("dense")
         self.input_size = input_size
         self.output_size = output_size

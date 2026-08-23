@@ -1,5 +1,5 @@
-import json
 import argparse
+import json
 
 from ml_runner_exporter.onnx_exporter import export_onnx
 

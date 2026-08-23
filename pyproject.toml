@@ -1,0 +1,72 @@
+[tool.poetry]
+name = "ml-runner-exporter"
+version = "1.0.0"
+description = "A python package for exporting machine learning models to run using the rust ml_runner crate."
+authors = ["David González León <david.gonzalezleon17@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "ml_runner_exporter"}]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+cache_dir="/tmp/.mypy_cache"
+packages = "ml_runner_exporter"
+warn_unused_ignores = "true"
+warn_redundant_casts = "true"
+check_untyped_defs = "true"
+warn_unreachable =  "true"
+disallow_untyped_calls = "true"
+disallow_incomplete_defs = "true"
+disallow_untyped_defs = "true"
+warn_incomplete_stub = "true"
+implicit_reexport = "false"
+color_output = "true"
+exclude = [".ipynb"]
+
+
+[tool.ruff]
+target-version = "py312"
+extend-exclude = ["*.ipynb", "main.py"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+unfixable = ["ALL"]
+fixable = ["RUF100",  "F401", "ANN204", "Q",  "Q000", "PIE790", "RSE102", "I001", "COM812"]
+ignore = [
+    "D", # documentation related
+    "E501", # line too long
+    "G004", # Checks for uses of f-strings to format logging messages.
+    "COM812", #  99 [*] Trailing comma missing
+    "RUF012", #  20 [ ] Mutable class attributes should be annotated with `typing.ClassVar`
+    "FIX002", #   4 [ ] Line contains TODO, consider resolving the issue
+    "TD003", #   4 [ ] Missing issue link on the line following this TODO
+    "PLW1508", #   3 [ ] Invalid type for environment variable default; expected `str` or `None`
+    "DTZ005", #   2 [ ] `datetime.datetime.now()` called without a `tz` argument
+    "DTZ001", #   1 [ ] `datetime.datetime()` called without a `tzinfo` argument
+    "EM102",
+    "PLR2004",
+    "CPY001",
+    "TRY003",
+    "ERA001",
+]
+
+[tool.ruff.lint.mccabe]
+# Unlike Flake8, default to a complexity level of 10.
+max-complexity = 16
+
+[tool.ruff.lint.pylint]
+max-args = 20
+max-branches = 14
+
+
+[tool.poetry.dependencies]
+python = "^3.14"
+onnx = "1.22.0"
+
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.16.4"
+mypy = "^2.3.1"

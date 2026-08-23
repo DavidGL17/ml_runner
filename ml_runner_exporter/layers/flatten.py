@@ -8,7 +8,7 @@ from ml_runner_exporter.layer import LayerParser
 
 class FlattenLayerParser(LayerParser):
 
-    def __init__(self, channels: int, height: int, width: int):
+    def __init__(self, channels: int, height: int, width: int) -> None:
         super().__init__("flatten")
         self.channels = channels
         self.height = height
@@ -36,7 +36,7 @@ class FlattenLayerParser(LayerParser):
         input_tensor_name = node.input[0]
         input_shape = tensor_shapes.get(input_tensor_name)
         if input_shape is None or len(input_shape) != 4:
-            raise ValueError(f"Could not determine a 4D (N, C, H, W) input shape for " f"{node.op_type} node {node.name}")
+            raise ValueError(f"Could not determine a 4D (N, C, H, W) input shape for {node.op_type} node {node.name}")
 
         _, channels, height, width = input_shape
 
@@ -44,15 +44,15 @@ class FlattenLayerParser(LayerParser):
             attrs = {a.name: a for a in node.attribute}
             axis = attrs["axis"].i if "axis" in attrs else 1
             if axis != 1:
-                raise ValueError(f"Flatten node {node.name} uses axis={axis}; only axis=1 " "(flattening the full C, H, W into one dimension) is supported")
+                raise ValueError(f"Flatten node {node.name} uses axis={axis}; only axis=1 (flattening the full C, H, W into one dimension) is supported")
         else:  # Reshape
             # Verify the constant target shape actually matches a flatten
             # ((batch, features)) rather than some other reshape pattern.
             if len(node.input) < 2 or node.input[1] not in weights:
-                raise ValueError(f"Reshape node {node.name} has no constant target shape; " "cannot verify it represents a flatten")
+                raise ValueError(f"Reshape node {node.name} has no constant target shape; cannot verify it represents a flatten")
             target_shape = weights[node.input[1]].tolist()
             expected_features = channels * height * width
             if not (len(target_shape) == 2 and target_shape[1] in (expected_features, -1)):
-                raise ValueError(f"Reshape node {node.name} has target shape {target_shape}; " "only a (batch, -1) flatten reshape is supported")
+                raise ValueError(f"Reshape node {node.name} has target shape {target_shape}; only a (batch, -1) flatten reshape is supported")
 
         return cls(channels=channels, height=height, width=width)

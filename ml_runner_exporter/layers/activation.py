@@ -16,31 +16,29 @@ class ActivationTypes(Enum):
     def to_rust_id(self) -> str:
         if self == ActivationTypes.ReLU:
             return "relu"
-        elif self == ActivationTypes.Sigmoid:
+        if self == ActivationTypes.Sigmoid:
             return "sigmoid"
-        elif self == ActivationTypes.Tanh:
+        if self == ActivationTypes.Tanh:
             return "tanh"
-        elif self == ActivationTypes.Softmax:
+        if self == ActivationTypes.Softmax:
             return "softmax"
-        else:
-            raise ValueError(f"Unknown activation type: {self}")
+        raise ValueError(f"Unknown activation type: {self}")
 
     @staticmethod
-    def from_onnx_type(type: str):
-        if type == "Relu":
+    def from_onnx_type(activation_type: str) -> Self:
+        if activation_type == "Relu":
             return ActivationTypes.ReLU
-        elif type == "Sigmoid":
+        if activation_type == "Sigmoid":
             return ActivationTypes.Sigmoid
-        elif type == "Tanh":
+        if activation_type == "Tanh":
             return ActivationTypes.Tanh
-        elif type == "Softmax":
+        if activation_type == "Softmax":
             return ActivationTypes.Softmax
-        else:
-            raise ValueError(f"Unknown activation type: {type}")
+        raise ValueError(f"Unknown activation type: {activation_type}")
 
 
 class ActivationLayerParser(LayerParser):
-    def __init__(self, activation_type: ActivationTypes, shape: dict):
+    def __init__(self, activation_type: ActivationTypes, shape: dict) -> None:
         super().__init__("activation")
         self.activation_type = activation_type
         self.shape = shape
@@ -60,7 +58,7 @@ class ActivationLayerParser(LayerParser):
         # 2. Look up the shape in our tensor_shapes dictionary
         shape = tensor_shapes.get(input_tensor_name)
         if shape is None:
-            raise ValueError(f"Could not determine input shape for activation node {node.name}; " "shape inference may have failed")
+            raise ValueError(f"Could not determine input shape for activation node {node.name}; shape inference may have failed")
 
         # 3. Convert to TensorShape's representation (Flat after a Dense
         #    layer, D3 after a Conv2D layer) - same helper used for the
