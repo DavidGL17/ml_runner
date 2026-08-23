@@ -46,6 +46,7 @@ ignore = [
     "PLW1508", #   3 [ ] Invalid type for environment variable default; expected `str` or `None`
     "DTZ005", #   2 [ ] `datetime.datetime.now()` called without a `tz` argument
     "DTZ001", #   1 [ ] `datetime.datetime()` called without a `tzinfo` argument
+    "EM101",
     "EM102",
     "PLR2004",
     "CPY001",

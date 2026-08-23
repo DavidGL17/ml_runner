@@ -30,8 +30,12 @@ class LinearLayerParser(LayerParser):
 
     @classmethod
     def linear_layer_from_onnx(cls, weight_matrix: ndarray | None, bias_vector: ndarray | None) -> Self:
-        input_size = weight_matrix.shape[1] if weight_matrix is not None else None
-        output_size = weight_matrix.shape[0] if weight_matrix is not None else None
+        if weight_matrix is None:
+            raise ValueError("Linear node is missing it's weight tensor")
+        if bias_vector is None:
+            raise ValueError("Linear node is missing it's bias vector")
+        input_size = int(weight_matrix.shape[1])
+        output_size = int(weight_matrix.shape[0])
         return cls(
             input_size=input_size,
             output_size=output_size,

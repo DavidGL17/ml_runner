@@ -83,7 +83,7 @@ class Conv2DLayerParser(LayerParser):
         _, in_channels, height, width = input_shape
         out_channels = weight_matrix.shape[0]
 
-        return Conv2DLayerParser(
+        return cls(
             kernel_size=kernel_shape[0],
             stride=strides[0],
             padding=pads[0],

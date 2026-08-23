@@ -1,4 +1,10 @@
-on: push
+name: rust
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
 
 jobs:
   test:
@@ -17,9 +23,9 @@ jobs:
         run: cargo test -F ${{ matrix.FEATURE }}
 
 
+  # set to publish only on tags like 1.0.0
   # publish:
   #   needs: test
-  #   if: github.ref == 'refs/heads/release'
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v6

@@ -47,12 +47,12 @@ def export_onnx(model_path: str) -> dict:
     in_shape: dict = {}
     out_shape: dict = {}
     for inp in graph.input:
-        shape = tuple(d.dim_value for d in inp.type.tensor_type.shape.dim)
-        in_shape = onnx_shape_to_tensor_shape(shape)
+        shape = tuple(d.dim_value for d in inp.type.tensor_type.shape.dim)  # type: ignore[assignment]
+        in_shape = onnx_shape_to_tensor_shape(shape)  # type: ignore[arg-type]
 
     for out in graph.output:
-        shape = tuple(d.dim_value for d in out.type.tensor_type.shape.dim)
-        out_shape = onnx_shape_to_tensor_shape(shape)
+        shape = tuple(d.dim_value for d in out.type.tensor_type.shape.dim)  # type: ignore[assignment]
+        out_shape = onnx_shape_to_tensor_shape(shape)  # type: ignore[arg-type]
 
     # --- Iterate over layers (nodes) ---
     layers: list[LayerParser] = []
@@ -64,21 +64,19 @@ def export_onnx(model_path: str) -> dict:
         bias_vector = node_weights[1] if len(node_weights) > 1 else None
 
         if node.op_type == "Gemm":
-            layer = LinearLayerParser.linear_layer_from_onnx(weight_matrix, bias_vector)
+            layers.append(LinearLayerParser.linear_layer_from_onnx(weight_matrix, bias_vector))
         elif node.op_type == "Conv":
-            layer = Conv2DLayerParser.conv2d_layer_from_onnx(node, tensor_shapes, weight_matrix, bias_vector)
+            layers.append(Conv2DLayerParser.conv2d_layer_from_onnx(node, tensor_shapes, weight_matrix, bias_vector))
         elif node.op_type in ("Flatten", "Reshape"):
-            layer = FlattenLayerParser.flatten_layer_from_onnx(node, tensor_shapes, weights)
+            layers.append(FlattenLayerParser.flatten_layer_from_onnx(node, tensor_shapes, weights))
         elif node.op_type in ["Relu", "Sigmoid", "Tanh", "Softmax"]:
-            layer = ActivationLayerParser.activation_layer_from_onnx(node, tensor_shapes)
+            layers.append(ActivationLayerParser.activation_layer_from_onnx(node, tensor_shapes))
         elif node.op_type == "RNN":
-            layer = RNNLayerParser.rnn_layer_from_onnx(node, tensor_shapes, weights)
+            layers.append(RNNLayerParser.rnn_layer_from_onnx(node, tensor_shapes, weights))
         elif node.op_type == "GRU":
-            layer = GRULayerParser.gru_layer_from_onnx(node, tensor_shapes, weights)
+            layers.append(GRULayerParser.gru_layer_from_onnx(node, tensor_shapes, weights))
         else:
             m = f"Unsupported layer type: {node.op_type}"
             raise ValueError(m)
-
-        layers.append(layer)
 
     return export_model(layers, in_shape, out_shape)

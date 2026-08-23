@@ -24,8 +24,8 @@ class ActivationTypes(Enum):
             return "softmax"
         raise ValueError(f"Unknown activation type: {self}")
 
-    @staticmethod
-    def from_onnx_type(activation_type: str) -> Self:
+    @classmethod
+    def from_onnx_type(cls, activation_type: str) -> Self:
         if activation_type == "Relu":
             return ActivationTypes.ReLU
         if activation_type == "Sigmoid":
