@@ -7,6 +7,16 @@ description = "A Rust crate for running machine learning models, with optional S
 homepage = "https://github.com/DavidGL17/ml_runner"
 repository = "https://github.com/DavidGL17/ml_runner"
 readme = "README.md" 
+exclude = [
+    "legacy_c_code/**",
+    "misc_notebooks/**",
+    "ml_runner_exporter/**",
+    "tests/**",
+    "pyproject.toml",
+    "poetry.lock",
+    "**.ipynb",
+    "**.py",
+]
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
