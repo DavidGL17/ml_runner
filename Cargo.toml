@@ -16,6 +16,7 @@ exclude = [
     "poetry.lock",
     "**.ipynb",
     "**.py",
+    ".github/**",
 ]
 
 [dependencies]

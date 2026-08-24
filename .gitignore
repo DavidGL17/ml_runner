@@ -8,3 +8,4 @@ target
 Cargo.lock
 export.json
 dist
+.python-version
