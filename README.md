@@ -108,6 +108,27 @@ To run the library, you can use one of the following targets :
 
 To run the tests, you can use `cargo test --all-features` to run all tests
 
+## Benchmarks 
+
+## Results for model : HugeLinearModel
+| Runner |             Backend             | Runs  |   Min    |    Max     |   Mean    |  Median  |   StdDev   | Errors |
+| :----: | :-----------------------------: | :---: | :------: | :--------: | :-------: | :------: | :--------: | :----: |
+| python | PyTorch 2.7.0 (CPU, 14 threads) |  990  | 1.620 ms |  7.249 ms  | 4.670 ms  | 4.688 ms | 625.494 µs |   0    |
+|  rust  |    ndarray (matrixmultiply)     |  990  | 4.452 ms | 25.582 ms  | 7.154 ms  | 5.987 ms |  3.014 ms  |   0    |
+|  rust  |           simd (wide)           |  990  | 3.905 ms | 25.319 ms  | 6.739 ms  | 4.735 ms |  4.554 ms  |   0    |
+|  rust  |         ndarray (BLAS)          |  990  | 2.835 ms | 112.862 ms | 15.437 ms | 8.690 ms | 16.322 ms  |   0    |
+
+
+## Results for model : LongLinearModel
+| Runner |             Backend             | Runs  |   Min    |    Max     |   Mean    |  Median  |   StdDev   | Errors |
+| :----: | :-----------------------------: | :---: | :------: | :--------: | :-------: | :------: | :--------: | :----: |
+| python | PyTorch 2.7.0 (CPU, 14 threads) |  990  | 3.721 ms | 15.246 ms  | 6.042 ms  | 5.654 ms |  1.526 ms  |   0    |
+|  rust  |    ndarray (matrixmultiply)     |  990  | 3.185 ms | 16.646 ms  | 5.359 ms  | 4.825 ms |  2.141 ms  |   0    |
+|  rust  |           simd (wide)           |  990  | 2.762 ms |  6.852 ms  | 3.541 ms  | 3.540 ms | 466.682 µs |   0    |
+|  rust  |         ndarray (BLAS)          |  990  | 2.150 ms | 301.096 ms | 17.027 ms | 4.247 ms | 35.321 ms  |   0    |
+
+
+
 ## Roadmap
 
 These are the next features that I would like to implement, in no specific order

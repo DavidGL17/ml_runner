@@ -9,6 +9,7 @@ mod tensor;
 
 use crate::model::Model;
 use crate::tensor::{Tensor, TensorShape};
+use serde::Serialize;
 use std::env;
 use std::fs;
 use std::time::{Duration, Instant};
@@ -101,13 +102,35 @@ fn backend_name() -> &'static str {
     }
 }
 
+/// JSON-serializable report written alongside the Markdown stdout output,
+/// so an external driver (e.g. a Python comparison script) can read the
+/// results of each feature-flagged build (default / simd / blas) back in.
+#[derive(Serialize)]
+struct BenchmarkReport<'a> {
+    model: &'a str,
+    backend: &'a str,
+    input_shape: String,
+    output_shape: String,
+    runs: usize,
+    warmup: usize,
+    errors: usize,
+    min_ns: f64,
+    max_ns: f64,
+    mean_ns: f64,
+    median_ns: f64,
+    std_dev_ns: f64,
+}
+
 fn main() {
-    // Usage: cargo run -- [path/to/export.json] [iterations]
+    // Usage: cargo run -- [path/to/export.json] [iterations] [output.json]
     //   path/to/export.json  Model file to benchmark. Defaults to "export.json".
     //   iterations           Number of timed forward passes. Defaults to 1000.
+    //   output.json          Optional path to write a JSON report to, in
+    //                        addition to the Markdown report printed to stdout.
     let mut args = env::args().skip(1);
     let path = args.next().unwrap_or_else(|| "export.json".to_string());
     let iterations: usize = args.next().and_then(|s| s.parse().ok()).unwrap_or(1000);
+    let output_json_path = args.next();
 
     // Discard a handful of warmup runs (cache warm-up, allocator settling,
     // etc.) before recording timings, but never so many that nothing is left.
@@ -176,7 +199,7 @@ fn main() {
 
     let stats = compute_stats(samples_ns);
 
-    // ---- Markdown report ----
+    // ---- Markdown report (stdout) ----
     println!("## Benchmark Report");
     println!();
     println!("- **Model:** `{}`", path);
@@ -195,4 +218,33 @@ fn main() {
     println!("| Mean   | {} |", fmt_ns(stats.mean));
     println!("| Median | {} |", fmt_ns(stats.median));
     println!("| StdDev | {} |", fmt_ns(stats.std_dev));
+
+    // ---- JSON report (optional file, for external tooling) ----
+    if let Some(out_path) = output_json_path {
+        let report = BenchmarkReport {
+            model: &path,
+            backend: backend_name(),
+            input_shape: format!("{:?}", model.input_shape),
+            output_shape: format!("{:?}", model.output_shape),
+            runs: stats.runs,
+            warmup,
+            errors,
+            min_ns: stats.min,
+            max_ns: stats.max,
+            mean_ns: stats.mean,
+            median_ns: stats.median,
+            std_dev_ns: stats.std_dev,
+        };
+
+        match serde_json::to_string_pretty(&report) {
+            Ok(json_text) => {
+                if let Err(e) = fs::write(&out_path, json_text) {
+                    eprintln!("Error writing JSON report to '{}': {}", out_path, e);
+                } else {
+                    println!("\nJSON report written to '{}'.", out_path);
+                }
+            }
+            Err(e) => eprintln!("Error serializing JSON report: {}", e),
+        }
+    }
 }

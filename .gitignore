@@ -9,3 +9,5 @@ Cargo.lock
 export.json
 dist
 .python-version
+bench_work
+combined_benchmark_results.json
