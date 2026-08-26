@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 import onnx
-from onnx import numpy_helper, shape_inference
+from onnx import GraphProto, numpy_helper, shape_inference
 
 from ml_runner_exporter.layers.activation import ActivationLayerParser
 from ml_runner_exporter.layers.conv import Conv2DLayerParser
@@ -13,6 +13,38 @@ from ml_runner_exporter.utils import onnx_shape_to_tensor_shape
 
 if TYPE_CHECKING:
     from ml_runner_exporter.layer import LayerParser
+
+
+def _compute_in_out_shapes(graph: GraphProto) -> tuple[dict, dict]:
+    # Get in and out shape for model
+    in_shape: dict = {}
+    out_shape: dict = {}
+    is_recurrent = len(graph.node) > 0 and graph.node[0].op_type in ("RNN", "GRU")
+    # (or just read it off whichever node output is populated - see below)
+
+    for inp in graph.input:
+        shape = tuple(d.dim_value for d in inp.type.tensor_type.shape.dim)
+        if is_recurrent:
+            seq_len, _batch, features = shape
+            in_shape = {"D2": {"dim1": seq_len, "dim2": features}}
+        else:
+            in_shape = onnx_shape_to_tensor_shape(shape)
+
+    for out in graph.output:
+        shape = tuple(d.dim_value for d in out.type.tensor_type.shape.dim)
+        if is_recurrent:
+            if len(shape) == 4:
+                # Y: (seq_len, num_directions, batch, hidden) -> return_sequences=True
+                seq_len, _num_directions, _batch, hidden = shape
+                out_shape = {"D2": {"dim1": seq_len, "dim2": hidden}}
+            else:
+                # Y_h: (num_directions, batch, hidden) -> final hidden state only
+                _num_directions, _batch, hidden = shape
+                out_shape = {"Flat": hidden}
+        else:
+            out_shape = onnx_shape_to_tensor_shape(shape)
+
+    return in_shape, out_shape
 
 
 def export_onnx(model_path: str) -> dict:
@@ -43,16 +75,7 @@ def export_onnx(model_path: str) -> dict:
     # --- Build a weights lookup for quick access (for Gemm/MatMul/Conv/RNN/GRU) ---
     weights = {init.name: numpy_helper.to_array(init) for init in graph.initializer}
 
-    # Get in and out shape for model
-    in_shape: dict = {}
-    out_shape: dict = {}
-    for inp in graph.input:
-        shape = tuple(d.dim_value for d in inp.type.tensor_type.shape.dim)  # type: ignore[assignment]
-        in_shape = onnx_shape_to_tensor_shape(shape)  # type: ignore[arg-type]
-
-    for out in graph.output:
-        shape = tuple(d.dim_value for d in out.type.tensor_type.shape.dim)  # type: ignore[assignment]
-        out_shape = onnx_shape_to_tensor_shape(shape)  # type: ignore[arg-type]
+    in_shape, out_shape = _compute_in_out_shapes(graph)
 
     # --- Iterate over layers (nodes) ---
     layers: list[LayerParser] = []

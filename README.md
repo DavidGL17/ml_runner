@@ -113,9 +113,10 @@ To run the tests, you can use `cargo test --all-features` to run all tests
 These are the next features that I would like to implement, in no specific order
 
 - [ ] Add activation functions support in simd
-- [ ] Implement parser for pytorch and tensorflow models
-- [ ] Export both the python library and rust library to pip/crates.io for easier usage
+- [ ] Add support for more layer types
 - [ ] Add support for non linear models (meaning models that are not just a simple chaining of layers but that have multiple paths and potentially multiple inputs/outputs)
 - [ ] Add support to other optimization backends (cuda, ...)
+- [ ] Export both the python library and rust library to pip/c rates.io for easier usage
 - [ ] Add support for non float models (right now only float is supported, we should allow export and run of models in int)
-- [ ] Add support for more layer types
+- [ ] Implement parser for pytorch and tensorflow models
+  - I will focus mainly on tensorflow support at first, since pytorch has a good onnx exporter
