@@ -31,13 +31,13 @@ A small library that aims to provide a fast and device agnostic way of running p
 
 ### Supported layers in Rust library
 
-|  layer  | simple forward | BLAS  | simd  |            comment             |
-| :-----: | :------------: | :---: | :---: | :----------------------------: |
-| Linear  |      yes       |  yes  |  yes  |                                |
-| Conv2D  |      yes       |  yes  |  no   |                                |
-| Flatten |      yes       |  yes  |  no   |                                |
-|   RNN   |      yes       |  yes  |  no   | Implemented but not tested yet |
-|   GRU   |      yes       |  yes  |  no   | Implemented but not tested yet |
+|  layer  | simple forward | BLAS  | simd  | comment |
+| :-----: | :------------: | :---: | :---: | :-----: |
+| Linear  |      yes       |  yes  |  yes  |         |
+| Conv2D  |      yes       |  yes  |  no   |         |
+| Flatten |      yes       |  yes  |  no   |         |
+|   RNN   |      yes       |  yes  |  no   |         |
+|   GRU   |      yes       |  yes  |  no   |         |
 
 #### Supported activation functions
 
