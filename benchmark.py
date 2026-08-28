@@ -33,15 +33,16 @@ import random
 import statistics
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import torch
-import torch.nn as nn
 import torch.onnx as torch_onnx
+from torch import nn
 
-from python_fixtures.benchmark_fixtures import HugeLinearModel, LongLinearModel
 from ml_runner_exporter import export_onnx
+from python_fixtures.benchmark_fixtures import HugeLinearModel, LongLinearModel
 
 RUST_FEATURES = ["default", "simd", "blas"]
 
@@ -50,13 +51,12 @@ def fmt_ns(ns: float) -> str:
     """Match the Rust fmt_ns: ms >= 1e6, µs >= 1e3, else ns."""
     if ns >= 1_000_000.0:
         return f"{ns / 1_000_000.0:.3f} ms"
-    elif ns >= 1_000.0:
+    if ns >= 1_000.0:
         return f"{ns / 1_000.0:.3f} \u00b5s"
-    else:
-        return f"{ns:.1f} ns"
+    return f"{ns:.1f} ns"
 
 
-def compute_stats(samples_ns):
+def compute_stats(samples_ns: list[float]) -> dict:
     runs = len(samples_ns)
     return {
         "runs": runs,
@@ -80,7 +80,7 @@ def benchmark_model_local(model: nn.Module, input_dim: int, iterations: int, see
     gen = torch.Generator(device="cpu").manual_seed(seed)
 
     model.eval()
-    samples_ns = []
+    samples_ns: list[float] = []
     errors = 0
     output_shape = None
 
@@ -94,7 +94,7 @@ def benchmark_model_local(model: nn.Module, input_dim: int, iterations: int, see
             try:
                 out = model(x)
                 elapsed = time.perf_counter_ns() - start
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 errors += 1
                 print(f"[python/{name}] Error during forward pass (iteration {i}): {e}")
                 continue
@@ -123,7 +123,7 @@ def benchmark_model_local(model: nn.Module, input_dim: int, iterations: int, see
     return row
 
 
-def export_and_run_model(model: nn.Module, input_shape, onnx_path: Path, export_path: Path) -> Path:
+def export_and_run_model(model: nn.Module, input_shape: Any, onnx_path: Path, export_path: Path) -> Path:
     """Export a PyTorch model to ONNX, then convert it to the Rust runner's
     JSON model format at `export_path`. Returns `export_path`."""
     if isinstance(input_shape, tuple) and len(input_shape) == 3:
@@ -137,7 +137,7 @@ def export_and_run_model(model: nn.Module, input_shape, onnx_path: Path, export_
     model.eval()
     torch_onnx.export(
         model,
-        dummy_input_data,
+        dummy_input_data,  # type: ignore[arg-type]
         str(onnx_path),
         export_params=True,
         opset_version=17,
@@ -161,7 +161,7 @@ def run_rust_benchmark(rust_dir: Path, export_path: Path, iterations: int, featu
     cmd += ["--", str(export_path.resolve()), str(iterations), str(report_path.resolve())]
 
     try:
-        result = subprocess.run(cmd, cwd=rust_dir, capture_output=True, text=True)
+        result = subprocess.run(cmd, cwd=rust_dir, capture_output=True, text=True, check=True)
     except OSError as e:
         # Covers a missing --rust-dir and a missing `cargo` executable alike.
         return {
@@ -187,7 +187,7 @@ def run_rust_benchmark(rust_dir: Path, export_path: Path, iterations: int, featu
             "backend": feature,
             "runs": 0,
             "errors": None,
-            "error_message": f"cargo run succeeded but '{report_path}' was not written. " f"stdout tail: {result.stdout.strip()[-500:]}",
+            "error_message": f"cargo run succeeded but '{report_path}' was not written. stdout tail: {result.stdout.strip()[-500:]}",
         }
 
     with open(report_path) as f:
@@ -219,9 +219,7 @@ def print_results(result: dict) -> str:
 
     for row in result["results"]:
         if not row.get("runs"):
-            lines.append(
-                f"| {row.get('runner', '?')} | {row.get('backend', '?')} " f"| 0 | - | - | - | - | - | {row.get('error_message', 'no successful runs')} |"
-            )
+            lines.append(f"| {row.get('runner', '?')} | {row.get('backend', '?')} | 0 | - | - | - | - | - | {row.get('error_message', 'no successful runs')} |")
             continue
 
         lines.append(
@@ -232,7 +230,7 @@ def print_results(result: dict) -> str:
     return output + "\n".join(lines) + "\n"
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Benchmark HugeLinearModel/LongLinearModel in PyTorch and in the Rust runner "
         "(default/simd/blas), and print one combined comparison table."
@@ -279,15 +277,15 @@ def main():
     print()
 
     models = [
-        ("HugeLinearModel", HugeLinearModel()),
-        ("LongLinearModel", LongLinearModel([random.randint(100, 1000) for _ in range(30)])),
+        ("HugeLinearModel", HugeLinearModel()),  # type: ignore[no-untyped-call]
+        ("LongLinearModel", LongLinearModel([random.randint(100, 1000) for _ in range(30)])),  # noqa : S311
     ]
 
     results = []
     output_to_print = []
 
     for idx, (name, model) in enumerate(models):
-        input_dim = model.get_input_dims()
+        input_dim = model.get_input_dims()  # type: ignore[operator]
         seed = args.seed + idx
         rows = []
 
@@ -334,7 +332,7 @@ def main():
     with open(args.results_file, "w") as f:
         json.dump(
             {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "iterations": args.iterations,
                 "seed": args.seed,
                 "results": results,

@@ -24,7 +24,7 @@ disallow_untyped_defs = "true"
 warn_incomplete_stub = "true"
 implicit_reexport = "false"
 color_output = "true"
-exclude = [".ipynb", "python_fixtures"]
+exclude = [".ipynb", "python_fixtures/"]
 
 
 [tool.ruff]
@@ -52,6 +52,10 @@ ignore = [
     "CPY001",
     "TRY003",
     "ERA001",
+    "T201",
+    "PTH123",
+    "ANN401",
+    "S603",
 ]
 
 [tool.ruff.lint.mccabe]
@@ -66,9 +70,9 @@ max-branches = 14
 [tool.poetry.dependencies]
 python = "^3.14"
 onnx = "1.22.0"
-torch = "^2.13.0"
+torch = "2.13.0"
 
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.16.4"
-mypy = "^2.3.1"
+ruff = "0.16.4"
+mypy = "2.3.1"
