@@ -4,7 +4,7 @@ from typing import Self
 from onnx import NodeProto
 
 from ml_runner_exporter.layer import LayerParser
-from ml_runner_exporter.utils import onnx_shape_to_tensor_shape
+from ml_runner_exporter.utils import dims_to_tensor_shape
 
 
 class ActivationTypes(Enum):
@@ -63,6 +63,6 @@ class ActivationLayerParser(LayerParser):
         # 3. Convert to TensorShape's representation (Flat after a Dense
         #    layer, D3 after a Conv2D layer) - same helper used for the
         #    model's overall input/output shape.
-        layer_shape = onnx_shape_to_tensor_shape(shape)
+        layer_shape = dims_to_tensor_shape(tuple(shape[1:]))
 
         return cls(ActivationTypes.from_onnx_type(node.op_type), layer_shape)

@@ -1,50 +1,54 @@
-from typing import TYPE_CHECKING
-
 import onnx
-from onnx import GraphProto, numpy_helper, shape_inference
+from onnx import GraphProto, NodeProto, numpy_helper, shape_inference
 
-from ml_runner_exporter.layers.activation import ActivationLayerParser
-from ml_runner_exporter.layers.conv import Conv2DLayerParser
-from ml_runner_exporter.layers.flatten import FlattenLayerParser
-from ml_runner_exporter.layers.linear import LinearLayerParser
-from ml_runner_exporter.layers.rnn import GRULayerParser, RNNLayerParser
+from ml_runner_exporter.dtos import NodeContext
+from ml_runner_exporter.layer import LayerParser
 from ml_runner_exporter.model import export_model
-from ml_runner_exporter.utils import onnx_shape_to_tensor_shape
-
-if TYPE_CHECKING:
-    from ml_runner_exporter.layer import LayerParser
+from ml_runner_exporter.node_dispatch import OP_HANDLERS
+from ml_runner_exporter.utils import dims_to_tensor_shape
 
 
 def _compute_in_out_shapes(graph: GraphProto) -> tuple[dict, dict]:
-    # Get in and out shape for model
-    in_shape: dict = {}
-    out_shape: dict = {}
     is_recurrent = len(graph.node) > 0 and graph.node[0].op_type in ("RNN", "GRU")
-    # (or just read it off whichever node output is populated - see below)
 
+    in_shape: dict = {}
     for inp in graph.input:
         shape = tuple(d.dim_value for d in inp.type.tensor_type.shape.dim)
         if is_recurrent:
             seq_len, _batch, features = shape
-            in_shape = {"D2": {"dim1": seq_len, "dim2": features}}
+            in_shape = dims_to_tensor_shape((seq_len, features))
         else:
-            in_shape = onnx_shape_to_tensor_shape(shape)
+            in_shape = dims_to_tensor_shape(tuple(shape[1:]))
 
+    out_shape: dict = {}
     for out in graph.output:
         shape = tuple(d.dim_value for d in out.type.tensor_type.shape.dim)
         if is_recurrent:
             if len(shape) == 4:
                 # Y: (seq_len, num_directions, batch, hidden) -> return_sequences=True
                 seq_len, _num_directions, _batch, hidden = shape
-                out_shape = {"D2": {"dim1": seq_len, "dim2": hidden}}
+                out_shape = dims_to_tensor_shape((seq_len, hidden))
             else:
                 # Y_h: (num_directions, batch, hidden) -> final hidden state only
                 _num_directions, _batch, hidden = shape
-                out_shape = {"Flat": hidden}
+                out_shape = dims_to_tensor_shape((hidden,))
         else:
-            out_shape = onnx_shape_to_tensor_shape(shape)
+            out_shape = dims_to_tensor_shape(tuple(shape[1:]))
 
     return in_shape, out_shape
+
+
+def _parse_node(node: NodeProto, tensor_shapes: dict, weights: dict) -> LayerParser:
+    node_weights = [weights[inp] for inp in node.input if inp in weights]
+    weight_matrix = node_weights[0] if node_weights else None
+    bias_vector = node_weights[1] if len(node_weights) > 1 else None
+
+    handler = OP_HANDLERS.get(node.op_type)
+    if handler is None:
+        raise ValueError(f"Unsupported layer type: {node.op_type}")
+
+    ctx = NodeContext(node, tensor_shapes, weights, node_weights, weight_matrix, bias_vector)
+    return handler(ctx)
 
 
 def export_onnx(model_path: str) -> dict:
@@ -53,53 +57,17 @@ def export_onnx(model_path: str) -> dict:
     onnx.checker.check_model(model)
     graph = model.graph
 
-    # --- Build a shape lookup for ALL tensors (weights AND intermediate outputs) ---
-    # This maps tensor_name -> shape (tuple)
     tensor_shapes = {}
-
-    # Add initializers (weights/biases)
     for init in graph.initializer:
         tensor_shapes[init.name] = numpy_helper.to_array(init).shape
-
-    # Add graph inputs (needed so the *first* layer, e.g. a Conv, can look up its
-    # own input shape the same way later layers look theirs up via value_info)
     for inp in graph.input:
-        shape = [d.dim_value for d in inp.type.tensor_type.shape.dim]
-        tensor_shapes[inp.name] = tuple(shape)
-
-    # Add intermediate tensors (the outputs of layers like Gemm)
+        tensor_shapes[inp.name] = tuple(d.dim_value for d in inp.type.tensor_type.shape.dim)
     for info in graph.value_info:
-        shape = [d.dim_value for d in info.type.tensor_type.shape.dim]
-        tensor_shapes[info.name] = tuple(shape)
+        tensor_shapes[info.name] = tuple(d.dim_value for d in info.type.tensor_type.shape.dim)
 
-    # --- Build a weights lookup for quick access (for Gemm/MatMul/Conv/RNN/GRU) ---
     weights = {init.name: numpy_helper.to_array(init) for init in graph.initializer}
-
     in_shape, out_shape = _compute_in_out_shapes(graph)
 
-    # --- Iterate over layers (nodes) ---
-    layers: list[LayerParser] = []
-    for node in graph.node:
-        # Extract weight and bias tensors from the node's inputs
-        node_weights = [weights[inp] for inp in node.input if inp in weights]
-
-        weight_matrix = node_weights[0] if len(node_weights) > 0 else None
-        bias_vector = node_weights[1] if len(node_weights) > 1 else None
-
-        if node.op_type == "Gemm":
-            layers.append(LinearLayerParser.linear_layer_from_onnx(weight_matrix, bias_vector))
-        elif node.op_type == "Conv":
-            layers.append(Conv2DLayerParser.conv2d_layer_from_onnx(node, tensor_shapes, weight_matrix, bias_vector))
-        elif node.op_type in ("Flatten", "Reshape"):
-            layers.append(FlattenLayerParser.flatten_layer_from_onnx(node, tensor_shapes, weights))
-        elif node.op_type in ["Relu", "Sigmoid", "Tanh", "Softmax"]:
-            layers.append(ActivationLayerParser.activation_layer_from_onnx(node, tensor_shapes))
-        elif node.op_type == "RNN":
-            layers.append(RNNLayerParser.rnn_layer_from_onnx(node, tensor_shapes, weights))
-        elif node.op_type == "GRU":
-            layers.append(GRULayerParser.gru_layer_from_onnx(node, tensor_shapes, weights))
-        else:
-            m = f"Unsupported layer type: {node.op_type}"
-            raise ValueError(m)
+    layers = [_parse_node(node, tensor_shapes, weights) for node in graph.node]
 
     return export_model(layers, in_shape, out_shape)

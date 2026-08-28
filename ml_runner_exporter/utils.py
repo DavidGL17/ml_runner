@@ -1,13 +1,10 @@
-def onnx_shape_to_tensor_shape(shape: tuple) -> dict:
-    """Convert an ONNX (N, ...) shape into TensorShape's serde JSON representation.
+def dims_to_tensor_shape(dims: tuple) -> dict:
+    """Convert a (already batch-stripped) dims tuple into TensorShape's serde JSON representation.
 
-    Drops the leading batch dimension. A single remaining dim becomes
-    {"Flat": n}; two remaining dims (e.g. seq_len, features) become
-    {"D2": {"dim1": .., "dim2": ..}}; three remaining dims (e.g. C, H, W)
-    become {"D3": {"dim1": .., "dim2": .., "dim3": ..}}.
+    A single dim becomes {"Flat": n}; two dims (e.g. seq_len, features) become
+    {"D2": {"dim1": .., "dim2": ..}}; three dims (e.g. C, H, W) become
+    {"D3": {"dim1": .., "dim2": .., "dim3": ..}}.
     """
-    dims = tuple(shape[1:])
-
     if len(dims) == 1:
         return {"Flat": dims[0]}
     if len(dims) == 2:
@@ -16,8 +13,5 @@ def onnx_shape_to_tensor_shape(shape: tuple) -> dict:
     if len(dims) == 3:
         dim1, dim2, dim3 = dims
         return {"D3": {"dim1": dim1, "dim2": dim2, "dim3": dim3}}
-    m = (
-        "Unsupported model input/output shape {shape}: expected a single dim (N, F), "
-        "a D2 dim (N, D1, D2), or a D3 dim (N, D1, D2, D3) after the batch dimension"
-    )
+    m = f"Unsupported shape {dims}: expected 1, 2, or 3 dims (Flat, D2, or D3) after dropping the leading dimension(s)"
     raise ValueError(m)
