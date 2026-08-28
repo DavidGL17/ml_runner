@@ -56,7 +56,7 @@ A small library that aims to provide a fast and device agnostic way of running p
 To export a simple example onnx model, you can run the following : 
 
 ```python
-python main.py --model-path simple_linear_model.onnx --output-path export.json
+poetry run python main.py --model-path simple_linear_model.onnx --output-path export.json
 ```
 
 or from your own code
@@ -109,6 +109,8 @@ To run the library, you can use one of the following targets :
 To run the tests, you can use `cargo test --all-features` to run all tests
 
 ## Benchmarks 
+
+Results obtained by running `poetry run python benchmark.py`
 
 ## Results for model : HugeLinearModel
 | Runner |             Backend             | Runs  |   Min    |    Max     |   Mean    |  Median  |   StdDev   | Errors |
