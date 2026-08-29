@@ -11,13 +11,17 @@ A small library that aims to provide a fast and device agnostic way of running p
 
 ### Supported layers in python library
 
-|  layer  | ONNX support |
-| :-----: | :----------: |
-| Linear  |     yes      |
-| Conv2D  |     yes      |
-| Flatten |     yes      |
-|   RNN   |     yes      |
-|   GRU   |     yes      |
+|   layer   | ONNX support |
+| :-------: | :----------: |
+|  Linear   |     yes      |
+|  Conv2D   |     yes      |
+|  Flatten  |     yes      |
+|    RNN    |     yes      |
+|    GRU    |     yes      |
+|    Add    |     yes      |
+|  Gather   |     yes      |
+|   Shape   |     yes      |
+| Transpose |     yes      |
 
 #### Supported activation functions
 

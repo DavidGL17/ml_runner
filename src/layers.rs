@@ -1,9 +1,13 @@
 use crate::activation::ActivationLayer;
+use crate::add::AddLayer;
 use crate::conv::Conv2DLayer;
 use crate::dense::DenseLayer;
 use crate::flatten::FlattenLayer;
+use crate::gather::GatherLayer;
 use crate::rnn::{GRULayer, RNNLayer};
+use crate::shape::ShapeLayer;
 use crate::tensor::{Tensor, TensorShape};
+use crate::transpose::TransposeLayer;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -21,6 +25,14 @@ pub enum Layer {
     Rnn(RNNLayer),
     #[serde(rename = "gru")]
     Gru(GRULayer),
+    #[serde(rename = "add")]
+    Add(AddLayer),
+    #[serde(rename = "gather")]
+    Gather(GatherLayer),
+    #[serde(rename = "shape")]
+    Shape(ShapeLayer),
+    #[serde(rename = "transpose")]
+    Transpose(TransposeLayer),
 }
 
 impl Layer {
@@ -35,10 +47,13 @@ impl Layer {
             Layer::Flatten(layer) => layer.input_shape(),
             Layer::Rnn(layer) => layer.input_shape(),
             Layer::Gru(layer) => layer.input_shape(),
+            Layer::Add(layer) => layer.input_shape(),
+            Layer::Gather(layer) => layer.input_shape(),
+            Layer::Shape(layer) => layer.input_shape(),
+            Layer::Transpose(layer) => layer.input_shape(),
         }
     }
 
-    /// The shape this layer produces, given a matching input shape.
     pub fn output_shape(&self) -> TensorShape {
         match self {
             Layer::Dense(layer) => layer.output_shape(),
@@ -47,6 +62,10 @@ impl Layer {
             Layer::Flatten(layer) => layer.output_shape(),
             Layer::Rnn(layer) => layer.output_shape(),
             Layer::Gru(layer) => layer.output_shape(),
+            Layer::Add(layer) => layer.output_shape(),
+            Layer::Gather(layer) => layer.output_shape(),
+            Layer::Shape(layer) => layer.output_shape(),
+            Layer::Transpose(layer) => layer.output_shape(),
         }
     }
 
@@ -58,6 +77,10 @@ impl Layer {
             Layer::Flatten(layer) => layer.forward(input),
             Layer::Rnn(layer) => layer.forward(input),
             Layer::Gru(layer) => layer.forward(input),
+            Layer::Add(layer) => layer.forward(input),
+            Layer::Gather(layer) => layer.forward(input),
+            Layer::Shape(layer) => layer.forward(input),
+            Layer::Transpose(layer) => layer.forward(input),
         }
     }
 }
@@ -199,5 +222,78 @@ mod tests {
         // h_1 = (1 - 0.5)*tanh(2.0) + 0.5*0 = 0.5*tanh(2.0)
         assert_eq!(output.shape(), TensorShape::Flat(1));
         assert_eq!(output.to_vec(), vec![0.5 * 2.0f32.tanh()]);
+    }
+
+    #[test]
+    fn test_add_layer_enum_dispatch() {
+        let layer = Layer::Add(AddLayer {
+            shape: TensorShape::Flat(2),
+            constants: vec![vec![1.0, 2.0]],
+        });
+        let input = Tensor::new(vec![10.0, 20.0], layer.input_shape());
+        let output = layer.forward(&input);
+        assert_eq!(output.to_vec(), vec![11.0, 22.0]);
+    }
+
+    #[test]
+    fn test_shape_layer_enum_dispatch() {
+        let layer = Layer::Shape(ShapeLayer {
+            input_shape: TensorShape::D3 {
+                dim1: 2,
+                dim2: 3,
+                dim3: 4,
+            },
+            output_shape: TensorShape::Flat(3),
+        });
+
+        let input = Tensor::new(vec![0.0; 24], layer.input_shape());
+        let output = layer.forward(&input);
+
+        assert_eq!(output.shape(), TensorShape::Flat(3));
+        assert_eq!(output.to_vec(), vec![2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn test_gather_layer_enum_dispatch() {
+        let layer = Layer::Gather(GatherLayer {
+            input_shape: TensorShape::D2 { dim1: 3, dim2: 2 },
+            output_shape: TensorShape::Flat(2),
+            axis: 0,
+            indices: Some(vec![1.0]),
+        });
+
+        #[rustfmt::skip]
+    let input = Tensor::new(
+        vec![
+            1.0, 2.0,
+            3.0, 4.0,
+            5.0, 6.0,
+        ],
+        layer.input_shape(),
+    );
+        let output = layer.forward(&input);
+
+        assert_eq!(output.shape(), TensorShape::Flat(2));
+        // row 1 of the input
+        assert_eq!(output.to_vec(), vec![3.0, 4.0]);
+    }
+
+    #[test]
+    fn test_transpose_layer_enum_dispatch() {
+        let layer = Layer::Transpose(TransposeLayer {
+            input_shape: TensorShape::D2 { dim1: 2, dim2: 3 },
+            perm: vec![1, 0],
+        });
+        #[rustfmt::skip]
+    let input = Tensor::new(
+        vec![
+            1.0, 2.0, 3.0,
+            4.0, 5.0, 6.0,
+        ],
+        layer.input_shape(),
+    );
+        let output = layer.forward(&input);
+        assert_eq!(output.shape(), TensorShape::D2 { dim1: 3, dim2: 2 });
+        assert_eq!(output.to_vec(), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
     }
 }

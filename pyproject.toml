@@ -76,3 +76,4 @@ torch = "2.13.0"
 [tool.poetry.group.dev.dependencies]
 ruff = "0.16.4"
 mypy = "2.3.1"
+ipykernel = "^7.3.0"

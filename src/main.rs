@@ -1,11 +1,15 @@
 mod activation;
+mod add;
 mod conv;
 mod dense;
 mod flatten;
+mod gather;
 mod layers;
 mod model;
 mod rnn;
+mod shape;
 mod tensor;
+mod transpose;
 
 use crate::model::Model;
 use crate::tensor::{Tensor, TensorShape};

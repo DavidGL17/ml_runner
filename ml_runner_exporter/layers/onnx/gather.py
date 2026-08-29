@@ -3,6 +3,7 @@ from typing import Any, Self
 from numpy import ndarray
 
 from ml_runner_exporter.layer import LayerParser
+from ml_runner_exporter.utils import dims_to_tensor_shape
 
 
 class GatherLayerParser(LayerParser):
@@ -35,14 +36,14 @@ class GatherLayerParser(LayerParser):
         indices_name = node.input[1]
 
         # 2. Get shapes
-        input_shape = tensor_shapes.get(input_name, ())
-        output_shape = tensor_shapes.get(node.output[0], ())
+        input_shape = dims_to_tensor_shape(tuple(tensor_shapes.get(input_name, ())[1:]))
+        output_shape = dims_to_tensor_shape(tuple(tensor_shapes.get(node.output[0], ())[1:]))
 
         # 3. Extract 'axis' attribute
         axis = 0  # Default fallback
         for attr in node.attribute:
             if attr.name == "axis":
-                axis = attr.ints[0]
+                axis = attr.i
                 break
 
         # 4. Try to extract indices if they are constant

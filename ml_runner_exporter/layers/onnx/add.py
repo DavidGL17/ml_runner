@@ -3,12 +3,13 @@ from typing import Self
 from numpy import ndarray
 
 from ml_runner_exporter.layer import LayerParser
+from ml_runner_exporter.utils import dims_to_tensor_shape
 
 
 class AddLayerParser(LayerParser):
     def __init__(self, shape: tuple, constants: list[list[float]]) -> None:
         super().__init__("add")
-        self.shape = shape
+        self.shape = dims_to_tensor_shape(tuple(shape[1:]))
         self.constants = constants
 
     def to_dict(self) -> dict:

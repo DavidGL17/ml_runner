@@ -47,7 +47,14 @@ def _parse_node(node: NodeProto, tensor_shapes: dict, weights: dict) -> LayerPar
     if handler is None:
         raise ValueError(f"Unsupported layer type: {node.op_type}")
 
-    ctx = NodeContext(node, tensor_shapes, weights, node_weights, weight_matrix, bias_vector)
+    ctx = NodeContext(
+        node=node,
+        tensor_shapes=tensor_shapes,
+        weights=weights,
+        node_weights=node_weights,
+        weight_matrix=weight_matrix,
+        bias_vector=bias_vector,
+    )
     return handler(ctx)
 
 
