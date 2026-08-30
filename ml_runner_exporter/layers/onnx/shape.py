@@ -5,7 +5,7 @@ from ml_runner_exporter.utils import dims_to_tensor_shape
 
 
 class ShapeLayerParser(LayerParser):
-    def __init__(self, input_shape: tuple, output_shape: tuple) -> None:
+    def __init__(self, input_shape: dict, output_shape: dict) -> None:
         super().__init__("shape")
         self.input_shape = input_shape
         self.output_shape = output_shape

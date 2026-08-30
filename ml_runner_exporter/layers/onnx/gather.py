@@ -7,7 +7,7 @@ from ml_runner_exporter.utils import dims_to_tensor_shape
 
 
 class GatherLayerParser(LayerParser):
-    def __init__(self, input_shape: tuple, output_shape: tuple, axis: int, indices: list[float] | None) -> None:
+    def __init__(self, input_shape: dict, output_shape: dict, axis: int, indices: list[float] | None) -> None:
         super().__init__("gather")
         self.input_shape = input_shape
         self.output_shape = output_shape

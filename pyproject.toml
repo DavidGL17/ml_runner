@@ -26,6 +26,10 @@ implicit_reexport = "false"
 color_output = "true"
 exclude = [".ipynb", "python_fixtures/"]
 
+[[tool.mypy.overrides]]
+module = "python_fixtures.*"
+ignore_errors = true
+
 
 [tool.ruff]
 target-version = "py312"

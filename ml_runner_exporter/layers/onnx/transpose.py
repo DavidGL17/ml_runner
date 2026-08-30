@@ -7,7 +7,7 @@ from ml_runner_exporter.utils import dims_to_tensor_shape
 
 
 class TransposeLayerParser(LayerParser):
-    def __init__(self, input_shape: tuple, perm: list[int]) -> None:
+    def __init__(self, input_shape: dict, perm: list[int]) -> None:
         super().__init__("transpose")
         self.input_shape = input_shape
         self.perm = perm
