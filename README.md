@@ -9,6 +9,8 @@ A small library that aims to provide a fast and device agnostic way of running p
   - ONNX models
 - A rust library to run the exported models on any platforms, with optimized functions depending on the platforms toolset
 
+The library supports complex models with multiple inputs and outputs, and with multiple paths inside the model.
+
 ### Supported layers in python library
 
 |   layer   | ONNX support |
@@ -141,7 +143,6 @@ These are the next features that I would like to implement, in no specific order
 
 - [ ] Add activation functions support in simd
 - [ ] Add support for more layer types
-- [ ] Add support for non linear models (meaning models that are not just a simple chaining of layers but that have multiple paths and potentially multiple inputs/outputs)
 - [ ] Add support to other optimization backends (cuda, ...)
 - [ ] Export both the python library and rust library to pip/c rates.io for easier usage
 - [ ] Add support for non float models (right now only float is supported, we should allow export and run of models in int)
