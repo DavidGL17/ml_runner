@@ -11,6 +11,21 @@ use crate::transpose::TransposeLayer;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct IoSpec {
+    pub name: String,
+    pub shape: TensorShape,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Node {
+    pub id: String,
+    pub inputs: Vec<String>,  // names of tensors this node reads
+    pub outputs: Vec<String>, // names of tensors this node produces
+    #[serde(flatten)]
+    pub op: Layer,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum Layer {
     #[serde(rename = "dense")]
@@ -69,18 +84,18 @@ impl Layer {
         }
     }
 
-    pub fn forward(&self, input: &Tensor) -> Tensor {
+    pub fn forward(&self, inputs: &[&Tensor]) -> Tensor {
         match self {
-            Layer::Dense(layer) => layer.forward(input),
-            Layer::Activation(layer) => layer.forward(input),
-            Layer::Conv2D(layer) => layer.forward(input),
-            Layer::Flatten(layer) => layer.forward(input),
-            Layer::Rnn(layer) => layer.forward(input),
-            Layer::Gru(layer) => layer.forward(input),
-            Layer::Add(layer) => layer.forward(input),
-            Layer::Gather(layer) => layer.forward(input),
-            Layer::Shape(layer) => layer.forward(input),
-            Layer::Transpose(layer) => layer.forward(input),
+            Layer::Dense(layer) => layer.forward(inputs[0]),
+            Layer::Activation(layer) => layer.forward(inputs[0]),
+            Layer::Conv2D(layer) => layer.forward(inputs[0]),
+            Layer::Flatten(layer) => layer.forward(inputs[0]),
+            Layer::Rnn(layer) => layer.forward(inputs[0]),
+            Layer::Gru(layer) => layer.forward(inputs[0]),
+            Layer::Add(layer) => layer.forward(inputs[0]),
+            Layer::Gather(layer) => layer.forward(inputs[0]),
+            Layer::Shape(layer) => layer.forward(inputs[0]),
+            Layer::Transpose(layer) => layer.forward(inputs[0]),
         }
     }
 }
@@ -99,7 +114,7 @@ mod tests {
             bias: vec![1.0],
         });
         let input = Tensor::new(vec![0.5], TensorShape::Flat(1));
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
         // (0.5 * 2.0) + 1.0 = 2.0
         assert_eq!(output.to_vec(), vec![2.0]);
     }
@@ -111,7 +126,7 @@ mod tests {
             shape: TensorShape::Flat(1),
         });
         let input = Tensor::new(vec![0.0], TensorShape::Flat(1));
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
         // Sigmoid(0) = 0.5
         assert_eq!(output.to_vec(), vec![0.5]);
     }
@@ -136,7 +151,7 @@ mod tests {
             layer.input_shape(),
         );
 
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
 
         assert_eq!(
             output.shape(),
@@ -161,7 +176,7 @@ mod tests {
         });
 
         let input = Tensor::new(vec![1.0, 2.0, 3.0, 4.0], layer.input_shape());
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
 
         assert_eq!(output.shape(), TensorShape::Flat(4));
         assert_eq!(output.to_vec(), vec![1.0, 2.0, 3.0, 4.0]);
@@ -182,7 +197,7 @@ mod tests {
         });
 
         let input = Tensor::new(vec![1.0, 2.0], layer.input_shape());
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
 
         // seq_len = 1 means the hidden-to-hidden term is multiplied by the
         // zero initial state, so this reduces to a single Dense-like step:
@@ -215,7 +230,7 @@ mod tests {
         });
 
         let input = Tensor::new(vec![2.0], layer.input_shape());
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
 
         // r = sigmoid(0) = 0.5, z = sigmoid(0) = 0.5, hn_term = 0
         // n = tanh(1*2.0 + 0.5*0) = tanh(2.0)
@@ -231,7 +246,7 @@ mod tests {
             constants: vec![vec![1.0, 2.0]],
         });
         let input = Tensor::new(vec![10.0, 20.0], layer.input_shape());
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
         assert_eq!(output.to_vec(), vec![11.0, 22.0]);
     }
 
@@ -247,7 +262,7 @@ mod tests {
         });
 
         let input = Tensor::new(vec![0.0; 24], layer.input_shape());
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
 
         assert_eq!(output.shape(), TensorShape::Flat(3));
         assert_eq!(output.to_vec(), vec![2.0, 3.0, 4.0]);
@@ -271,7 +286,7 @@ mod tests {
         ],
         layer.input_shape(),
     );
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
 
         assert_eq!(output.shape(), TensorShape::Flat(2));
         // row 1 of the input
@@ -292,8 +307,27 @@ mod tests {
         ],
         layer.input_shape(),
     );
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
         assert_eq!(output.shape(), TensorShape::D2 { dim1: 3, dim2: 2 });
         assert_eq!(output.to_vec(), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
+    }
+
+    /// `Layer::forward` takes a slice to leave room for future multi-input
+    /// ops, but every current variant still only reads `inputs[0]`. This
+    /// documents that until a real multi-input layer lands, extra slice
+    /// entries are simply ignored - so nobody is surprised later.
+    #[test]
+    fn test_layer_forward_only_uses_first_input_for_now() {
+        let layer = Layer::Dense(DenseLayer {
+            input_size: 1,
+            output_size: 1,
+            weights: vec![2.0],
+            bias: vec![1.0],
+        });
+        let used = Tensor::new(vec![0.5], TensorShape::Flat(1));
+        let ignored = Tensor::new(vec![999.0], TensorShape::Flat(1));
+
+        let output = layer.forward(&[&used, &ignored]);
+        assert_eq!(output.to_vec(), vec![2.0]); // 0.5*2 + 1 = 2.0, `ignored` unused
     }
 }

@@ -14,6 +14,7 @@ mod transpose;
 use crate::model::Model;
 use crate::tensor::{Tensor, TensorShape};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::time::{Duration, Instant};
@@ -50,6 +51,14 @@ fn random_tensor(shape: &TensorShape, rng: &mut Rng) -> Tensor {
     let n = shape.total_size();
     let data: Vec<f32> = (0..n).map(|_| rng.next_f32()).collect();
     Tensor::new(data, shape.clone())
+}
+
+fn random_inputs(model: &Model, rng: &mut Rng) -> HashMap<String, Tensor> {
+    model
+        .inputs
+        .iter()
+        .map(|spec| (spec.name.clone(), random_tensor(&spec.shape, rng)))
+        .collect()
 }
 
 /// Summary statistics for a batch of timings, all in nanoseconds.
@@ -113,8 +122,8 @@ fn backend_name() -> &'static str {
 struct BenchmarkReport<'a> {
     model: &'a str,
     backend: &'a str,
-    input_shape: String,
-    output_shape: String,
+    inputs: Vec<(String, String)>,  // (name, shape) pairs
+    outputs: Vec<(String, String)>, // (name, shape) pairs
     runs: usize,
     warmup: usize,
     errors: usize,
@@ -174,10 +183,10 @@ fn main() {
     let mut errors = 0usize;
 
     for i in 0..iterations {
-        let input = random_tensor(&model.input_shape, &mut rng);
+        let input = random_inputs(&model, &mut rng);
 
         let start = Instant::now();
-        let result = model.forward(&input);
+        let result = model.forward(input);
         let elapsed: Duration = start.elapsed();
 
         match result {
@@ -208,8 +217,14 @@ fn main() {
     println!();
     println!("- **Model:** `{}`", path);
     println!("- **Backend:** {}", backend_name());
-    println!("- **Input shape:** {:?}", model.input_shape);
-    println!("- **Output shape:** {:?}", model.output_shape);
+    println!("- **Inputs:**");
+    for spec in &model.inputs {
+        println!("  - `{}`: {:?}", spec.name, spec.shape);
+    }
+    println!("- **Outputs:**");
+    for spec in &model.outputs {
+        println!("  - `{}`: {:?}", spec.name, spec.shape);
+    }
     println!(
         "- **Successful runs:** {} (warmup discarded: {}, errors: {})",
         stats.runs, warmup, errors
@@ -228,8 +243,16 @@ fn main() {
         let report = BenchmarkReport {
             model: &path,
             backend: backend_name(),
-            input_shape: format!("{:?}", model.input_shape),
-            output_shape: format!("{:?}", model.output_shape),
+            inputs: model
+                .inputs
+                .iter()
+                .map(|spec| (spec.name.clone(), format!("{:?}", spec.shape)))
+                .collect(),
+            outputs: model
+                .outputs
+                .iter()
+                .map(|spec| (spec.name.clone(), format!("{:?}", spec.shape)))
+                .collect(),
             runs: stats.runs,
             warmup,
             errors,

@@ -1,15 +1,19 @@
-from .layer import LayerParser
+def export_model(nodes: list[dict], inputs: list[dict], outputs: list[dict]) -> dict:
+    """Build the JSON-serializable dict describing the whole model graph,
+    matching the `Model` struct the Rust runtime deserializes via
+    `Model::from_json`.
 
+    `inputs`/`outputs` are lists of IoSpec dicts: {"name": ..., "shape": ...},
+    where `shape` is already in TensorShape's serde representation (e.g.
+    {"Flat": 10} or {"D3": {"dim1": 3, "dim2": 4, "dim3": 5}}).
 
-def export_model(model_layers: list[LayerParser], input_shape: dict, output_shape: dict) -> dict:
-    """Build the JSON-serializable dict describing the whole model, matching the `Model` struct the Rust runtime deserializes via `Model::from_json`.
-
-    `input_shape`/`output_shape` must already be in TensorShape's serde
-    representation, e.g. {"Flat": 10} or
-    {"D3": {"dim1": 3, "dim2": 4, "dim3": 5}}.
+    `nodes` are already-built graph node dicts (see `_build_node` in
+    `onnx_exporter.py`): each has "id", "inputs", "outputs", plus whatever
+    a `LayerParser.to_dict()` contributes (the "type" tag and the layer's
+    own fields), matching the `Node` struct on the Rust side.
     """
     return {
-        "input_shape": input_shape,
-        "output_shape": output_shape,
-        "layers": [layer.to_dict() for layer in model_layers],
+        "inputs": inputs,
+        "outputs": outputs,
+        "nodes": nodes,
     }
