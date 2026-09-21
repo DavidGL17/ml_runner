@@ -215,7 +215,7 @@ def print_results(result: dict) -> str:
     lines = [header, sep]
 
     output = "\n"
-    output += f"## Results for model : {result["model"]}\n"
+    output += f"## Results for model : {result['model']}\n"
 
     for row in result["results"]:
         if not row.get("runs"):

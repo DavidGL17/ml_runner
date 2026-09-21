@@ -25,79 +25,47 @@ pub struct Node {
     pub op: Layer,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "type")]
-pub enum Layer {
-    #[serde(rename = "dense")]
-    Dense(DenseLayer),
-    #[serde(rename = "activation")]
-    Activation(ActivationLayer),
-    #[serde(rename = "conv2d")]
-    Conv2D(Conv2DLayer),
-    #[serde(rename = "flatten")]
-    Flatten(FlattenLayer),
-    #[serde(rename = "rnn")]
-    Rnn(RNNLayer),
-    #[serde(rename = "gru")]
-    Gru(GRULayer),
-    #[serde(rename = "add")]
-    Add(AddLayer),
-    #[serde(rename = "gather")]
-    Gather(GatherLayer),
-    #[serde(rename = "shape")]
-    Shape(ShapeLayer),
-    #[serde(rename = "transpose")]
-    Transpose(TransposeLayer),
+macro_rules! define_layers {
+    ($($variant:ident($ty:path) => $tag:literal),+ $(,)?) => {
+        #[derive(Debug, Serialize, Deserialize, Clone)]
+        #[serde(tag = "type")]
+        pub enum Layer {
+            $(#[serde(rename = $tag)] $variant($ty),)+
+        }
+
+        impl Layer {
+            pub fn input_shape(&self) -> TensorShape {
+                match self {
+                    $(Layer::$variant(layer) => layer.input_shape(),)+
+                }
+            }
+
+            pub fn output_shape(&self) -> TensorShape {
+                match self {
+                    $(Layer::$variant(layer) => layer.output_shape(),)+
+                }
+            }
+
+            pub fn forward(&self, inputs: &[&Tensor]) -> Tensor {
+                match self {
+                    $(Layer::$variant(layer) => layer.forward(inputs[0]),)+
+                }
+            }
+        }
+    };
 }
 
-impl Layer {
-    /// The shape this layer expects to receive. Used by
-    /// `Model::validate_shapes` to check the layer chain before any data
-    /// actually flows through it.
-    pub fn input_shape(&self) -> TensorShape {
-        match self {
-            Layer::Dense(layer) => layer.input_shape(),
-            Layer::Activation(layer) => layer.input_shape(),
-            Layer::Conv2D(layer) => layer.input_shape(),
-            Layer::Flatten(layer) => layer.input_shape(),
-            Layer::Rnn(layer) => layer.input_shape(),
-            Layer::Gru(layer) => layer.input_shape(),
-            Layer::Add(layer) => layer.input_shape(),
-            Layer::Gather(layer) => layer.input_shape(),
-            Layer::Shape(layer) => layer.input_shape(),
-            Layer::Transpose(layer) => layer.input_shape(),
-        }
-    }
-
-    pub fn output_shape(&self) -> TensorShape {
-        match self {
-            Layer::Dense(layer) => layer.output_shape(),
-            Layer::Activation(layer) => layer.output_shape(),
-            Layer::Conv2D(layer) => layer.output_shape(),
-            Layer::Flatten(layer) => layer.output_shape(),
-            Layer::Rnn(layer) => layer.output_shape(),
-            Layer::Gru(layer) => layer.output_shape(),
-            Layer::Add(layer) => layer.output_shape(),
-            Layer::Gather(layer) => layer.output_shape(),
-            Layer::Shape(layer) => layer.output_shape(),
-            Layer::Transpose(layer) => layer.output_shape(),
-        }
-    }
-
-    pub fn forward(&self, inputs: &[&Tensor]) -> Tensor {
-        match self {
-            Layer::Dense(layer) => layer.forward(inputs[0]),
-            Layer::Activation(layer) => layer.forward(inputs[0]),
-            Layer::Conv2D(layer) => layer.forward(inputs[0]),
-            Layer::Flatten(layer) => layer.forward(inputs[0]),
-            Layer::Rnn(layer) => layer.forward(inputs[0]),
-            Layer::Gru(layer) => layer.forward(inputs[0]),
-            Layer::Add(layer) => layer.forward(inputs[0]),
-            Layer::Gather(layer) => layer.forward(inputs[0]),
-            Layer::Shape(layer) => layer.forward(inputs[0]),
-            Layer::Transpose(layer) => layer.forward(inputs[0]),
-        }
-    }
+define_layers! {
+    Dense(DenseLayer) => "dense",
+    Activation(ActivationLayer) => "activation",
+    Conv2D(Conv2DLayer) => "conv2d",
+    Flatten(FlattenLayer) => "flatten",
+    Rnn(RNNLayer) => "rnn",
+    Gru(GRULayer) => "gru",
+    Add(AddLayer) => "add",
+    Gather(GatherLayer) => "gather",
+    Shape(ShapeLayer) => "shape",
+    Transpose(TransposeLayer) => "transpose",
 }
 
 #[cfg(test)]
