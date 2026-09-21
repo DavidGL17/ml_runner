@@ -68,6 +68,27 @@ value for that run - so quick one-off tweaks don't require editing the file.
 a different config file; if no config file exists at all, the script just
 falls back to CLI flags/defaults exactly as before.
 
+Every remote command (preflight checks, `poetry install`, the Python
+benchmark re-invocation, and the Rust `cargo run`) is executed as
+`bash -lc '<command>'` over ssh rather than being handed to ssh directly.
+Plain `ssh host "cmd"` runs a non-interactive, non-login shell on most
+systems, which typically does NOT source ~/.bashrc or ~/.profile - so
+anything whose PATH entry is only added there (Poetry installed to
+~/.local/bin is the classic example: `poetry` works fine when you SSH in
+interactively, but `command -v poetry` mysteriously fails from a script)
+will appear "missing" even though it's installed. Forcing a login shell
+(`-l`) makes bash source the login profile files, picking up the same PATH
+the interactive shell has.
+
+Before benchmarking a device, this script provisions its Poetry
+environment rather than assuming it's already set up: it copies the
+local pyproject.toml (and poetry.lock, if present) to the device's
+remote_dir, then runs `poetry install` there. This is a genuine
+dependency check - it actually installs whatever the lockfile calls for,
+rather than just probing for one importable module - and it runs whether
+or not "sync" does a full project rsync, so it also covers devices you've
+pointed at a directory you manage by hand.
+
 How to run :
 
 # Simplest case: everything comes from ./benchmark_config.json
@@ -281,6 +302,11 @@ def run_rust_benchmark(rust_dir: Path, export_path: Path, iterations: int, featu
 #     device with --skip-rust, and reading back its results file.
 #   - the Rust benchmark is run by scp-ing the exported model JSON over and
 #     invoking `cargo run` on the device, then scp-ing the report back.
+#
+# Every remote Python invocation goes through `poetry run <python_bin>`
+# (see RemoteDevice.python_invocation), so the remote project must be
+# Poetry-managed (a pyproject.toml next to benchmark.py, with `poetry
+# install` already run there at least once).
 # --------------------------------------------------------------------------
 
 
@@ -301,7 +327,7 @@ class RemoteDevice:
 
 
 _DEVICE_CONFIG_REQUIRED_FIELDS = ("name", "host", "dir")
-_DEVICE_CONFIG_OPTIONAL_FIELDS = ("python", "poetry", "rust_dir", "features", "sync", "skip_python", "skip_rust")
+_DEVICE_CONFIG_OPTIONAL_FIELDS = ("python", "rust_dir", "features", "sync", "skip_python", "skip_rust")
 _DEVICE_CONFIG_ALL_FIELDS = _DEVICE_CONFIG_REQUIRED_FIELDS + _DEVICE_CONFIG_OPTIONAL_FIELDS
 
 
@@ -414,9 +440,24 @@ def load_config(path: str) -> tuple[dict, list[RemoteDevice], Path | None]:
     return resolved, devices
 
 
+def _wrap_login_shell(command: str) -> str:
+    """Wrap a remote command so it runs inside a login shell (`bash -lc`).
+
+    Plain `ssh host "some command"` runs a non-interactive, *non-login*
+    shell on most systems, which typically does NOT source ~/.bashrc or
+    ~/.profile. Anything whose PATH entry is only added by those files -
+    Poetry installed to ~/.local/bin is the classic case - will then look
+    "missing" (`command -v poetry` fails) even though it works fine when
+    you SSH in and type commands interactively. `bash -lc` forces bash to
+    act as a login shell, sourcing the same profile files an interactive
+    login would, so it sees the same PATH.
+    """
+    return f"bash -lc {shlex.quote(command)}"
+
+
 def run_remote_cmd(host: str, cwd: str, command: str, timeout: float | None = None) -> subprocess.CompletedProcess:
     full_cmd = f"cd {shlex.quote(cwd)} && {command}"
-    return subprocess.run(["ssh", *SSH_OPTS, host, full_cmd], capture_output=True, text=True, timeout=timeout)
+    return subprocess.run(["ssh", *SSH_OPTS, host, _wrap_login_shell(full_cmd)], capture_output=True, text=True, timeout=timeout)
 
 
 def ensure_remote_dir(host: str, path: str, timeout: float | None = 30) -> None:
@@ -477,41 +518,39 @@ def sync_project_to_remote(local_root: Path, device: RemoteDevice, timeout: floa
 
 
 def preflight_check_device(device: RemoteDevice, timeout: float | None = None) -> str | None:
-    """Run cheap remote checks before committing to a full rsync + benchmark
-    run: is the host reachable over ssh, and does it have what this device's
-    config says it will need (cargo for the Rust side, Poetry for the python side)?
+    """Run a cheap remote check before committing to a full rsync + benchmark
+    run: is the host reachable over ssh, and does it have `cargo` if this
+    device will run the Rust side?
 
-    Returns an error message describing the first thing that's missing, or
-    None if the device looks ready. This exists so a typo'd python binary, a
-    missing `poetry`, or a Pi that never got `cargo`/`torch` installed fails
-    in a few seconds, instead of after several minutes of rsync-ing and
-    building.
+    Poetry/torch readiness is deliberately *not* probed here anymore - that
+    used to just check whether `poetry` was on PATH and whether `import
+    torch` happened to succeed already, which says nothing about whether the
+    environment actually matches the current pyproject.toml/poetry.lock.
+    provision_device_poetry_env() replaces that probe with a real install,
+    so any missing/mismatched Python dependency surfaces there instead, with
+    the actual `poetry install` output attached to the error.
 
-    Every check message is built with shlex.quote so it is always passed to
-    `echo` as a single, fully-quoted argument - an earlier version left
-    trailing parentheses like `(python module)` unquoted, which some remote
-    login shells (e.g. zsh) parse as a subshell/glob qualifier instead of
-    literal text, causing a cryptic "unknown file attribute" failure.
+    Returns an error message describing the problem, or None if the device
+    looks reachable and (when needed) has cargo. This exists so a dead host
+    or a Pi that never got `cargo` installed fails in a few seconds, instead
+    of after several minutes of rsync-ing and building.
+
+    The check message is built with shlex.quote so it is always passed to
+    `echo` as a single, fully-quoted argument, and the whole check script is
+    run via _wrap_login_shell so it sees the same PATH an interactive SSH
+    session would (see that function's docstring for why that matters).
     """
     checks = []
     if not device.skip_rust:
         checks.append("command -v cargo >/dev/null 2>&1 || echo __MISSING__:cargo")
-    if not device.skip_python:
-        py = shlex.quote(device.python_bin)
-        poetry_msg = shlex.quote("poetry (required because 'poetry' is set for this device)")
-        checks.append(f"command -v poetry >/dev/null 2>&1 || echo __MISSING__:{poetry_msg}")
-        torch_msg = shlex.quote(f"torch (python module, checked via 'poetry run {device.python_bin}')")
-        checks.append(f"cd {shlex.quote(device.remote_dir)} && poetry run {py} -c 'import torch' >/dev/null 2>&1 || echo __MISSING__:{torch_msg}")
     if not checks:
         return None
 
     remote_script = " ; ".join(checks)
     try:
-        result = subprocess.run(["ssh", *SSH_OPTS, device.host, remote_script], capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(["ssh", *SSH_OPTS, device.host, _wrap_login_shell(remote_script)], capture_output=True, text=True, timeout=timeout)
     except (subprocess.TimeoutExpired, OSError) as e:
         return f"could not reach device for preflight check: {_err_tail(e)}"
-    print(remote_script)
-    print(result)
 
     missing = [line[len("__MISSING__:") :] for line in result.stdout.splitlines() if line.startswith("__MISSING__:")]
     if missing:
@@ -519,6 +558,56 @@ def preflight_check_device(device: RemoteDevice, timeout: float | None = None) -
     if result.returncode != 0:
         # ssh (or the shell it ran) failed outright - auth, unknown host, etc.
         return f"ssh preflight check failed (exit {result.returncode}): {result.stderr.strip()[-300:]}"
+    return None
+
+
+def provision_device_poetry_env(device: RemoteDevice, local_project_dir: Path, timeout: float | None = None) -> str | None:
+    """Copy the local pyproject.toml (and poetry.lock, if present) to
+    `device.remote_dir`, then run `poetry install` there.
+
+    This is a genuine dependency check: it actually installs whatever the
+    lockfile calls for, rather than just probing for one importable module
+    (the old preflight check's `import torch`, which would happily pass on a
+    stale environment missing everything else in pyproject.toml). It runs
+    regardless of whether `device.sync` does a full project rsync, so it
+    also covers devices pointed at a remote_dir you manage by hand and never
+    rsync into.
+
+    Returns an error message on failure (including the tail of `poetry
+    install`'s stderr), or None if the environment is ready.
+    """
+    if device.skip_python:
+        return None
+
+    pyproject_path = local_project_dir / "pyproject.toml"
+    if not pyproject_path.exists():
+        return f"local '{pyproject_path}' not found - cannot provision a Poetry env on '{device.name}'"
+
+    try:
+        ensure_remote_dir(device.host, device.remote_dir, timeout=timeout)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        return f"could not create remote dir '{device.remote_dir}': {_err_tail(e)}"
+
+    try:
+        scp_to_remote(pyproject_path, device.host, f"{device.remote_dir}/pyproject.toml", timeout=timeout)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        return f"failed to copy pyproject.toml to '{device.name}': {_err_tail(e)}"
+
+    lock_path = local_project_dir / "poetry.lock"
+    if lock_path.exists():
+        try:
+            scp_to_remote(lock_path, device.host, f"{device.remote_dir}/poetry.lock", timeout=timeout)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+            return f"failed to copy poetry.lock to '{device.name}': {_err_tail(e)}"
+
+    try:
+        result = run_remote_cmd(device.host, device.remote_dir, "poetry install", timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError) as e:
+        return f"failed to run 'poetry install' on '{device.name}': {_err_tail(e)}"
+
+    if result.returncode != 0:
+        return f"'poetry install' failed on '{device.name}' (exit {result.returncode}): {result.stderr.strip()[-500:]}"
+
     return None
 
 
@@ -713,6 +802,20 @@ def main() -> None:
             print(f"  WARNING: preflight check for '{device.name}' failed, will skip this device: {preflight_error}")
             device_errors[device.name] = preflight_error
             continue
+
+        # Provision the device's Poetry environment for real (copy
+        # pyproject.toml/poetry.lock, then `poetry install`) rather than
+        # assuming it's already set up. This runs whether or not `sync` will
+        # also rsync the whole project below, since it's the actual
+        # dependency check - `sync` is just about getting the rest of the
+        # project (this script, the Rust crate, fixtures, ...) over there.
+        if not device.skip_python:
+            print(f"Provisioning Poetry env on device '{device.name}' ({device.host}:{device.remote_dir})...")
+            provision_error = provision_device_poetry_env(device, local_project_dir, timeout=settings["device_timeout"])
+            if provision_error:
+                print(f"  WARNING: Poetry provisioning for '{device.name}' failed, will skip this device: {provision_error}")
+                device_errors[device.name] = provision_error
+                continue
 
         if not device.sync:
             continue

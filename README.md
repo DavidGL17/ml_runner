@@ -119,29 +119,24 @@ To run the tests, you can use `cargo test --all-features` to run all tests
 Results obtained by running `poetry run python benchmark.py`
 
 ## Results for model : HugeLinearModel
-|   Runner   |                Backend                | Runs  |   Min    |    Max    |   Mean   |  Median  |   StdDev   |                                                                       Errors                                                                       |
-| :--------: | :-----------------------------------: | :---: | :------: | :-------: | :------: | :------: | :--------: | :------------------------------------------------------------------------------------------------------------------------------------------------: |
-|   python   | PyTorch 2.13.0+cu130 (CPU, 6 threads) |  990  | 2.400 ms | 4.654 ms  | 2.762 ms | 2.709 ms | 225.574 µs |                                                                         0                                                                          |
-|    rust    |       ndarray (matrixmultiply)        |  990  | 4.728 ms | 19.880 ms | 5.498 ms | 5.189 ms |  1.008 ms  |                                                                         0                                                                          |
-|    rust    |              simd (wide)              |  990  | 4.157 ms | 11.540 ms | 4.844 ms | 4.665 ms | 744.508 µs |                                                                         0                                                                          |
-|    rust    |            ndarray (BLAS)             |  990  | 2.471 ms | 53.235 ms | 5.019 ms | 3.469 ms |  4.196 ms  |                                                                         0                                                                          |
-| python@pi4 |                  pi4                  |   0   |    -     |     -     |    -     |    -     |     -      | remote python benchmark failed (exit 2): python3: can't open file '/home/david/ml-runner/benchmark_models.py': [Errno 2] No such file or directory |
-|  rust@pi4  |                default                |   0   |    -     |     -     |    -     |    -     |     -      |                                        remote cargo run failed (exit 127): zsh:1: command not found: cargo                                         |
-|  rust@pi4  |                 simd                  |   0   |    -     |     -     |    -     |    -     |     -      |                                        remote cargo run failed (exit 127): zsh:1: command not found: cargo                                         |
-|  rust@pi4  |                 blas                  |   0   |    -     |     -     |    -     |    -     |     -      |                                        remote cargo run failed (exit 127): zsh:1: command not found: cargo                                         |
-
+|  Runner  |                Backend                | Runs  |    Min    |    Max     |   Mean    |  Median   |   StdDev   | Errors |
+| :------: | :-----------------------------------: | :---: | :-------: | :--------: | :-------: | :-------: | :--------: | :----: |
+|  python  | PyTorch 2.13.0+cu130 (CPU, 6 threads) |  990  | 2.687 ms  | 15.460 ms  | 4.885 ms  | 4.615 ms  |  1.583 ms  |   0    |
+|   rust   |       ndarray (matrixmultiply)        |  990  | 5.008 ms  | 22.087 ms  | 7.947 ms  | 7.820 ms  |  1.820 ms  |   0    |
+|   rust   |              simd (wide)              |  990  | 4.336 ms  | 24.089 ms  | 7.156 ms  | 6.824 ms  |  1.944 ms  |   0    |
+|   rust   |            ndarray (BLAS)             |  990  | 2.774 ms  | 122.733 ms | 34.098 ms | 31.745 ms | 16.052 ms  |   0    |
+| rust@pi4 |       ndarray (matrixmultiply)        |  990  | 15.886 ms | 24.844 ms  | 16.768 ms | 16.403 ms | 988.648 µs |   0    |
+| rust@pi4 |              simd (wide)              |  990  | 16.142 ms | 22.196 ms  | 16.538 ms | 16.364 ms | 594.539 µs |   0    |
 
 ## Results for model : LongLinearModel
-|   Runner   |                Backend                | Runs  |   Min    |    Max     |   Mean   |  Median  |   StdDev   |                                                                       Errors                                                                       |
-| :--------: | :-----------------------------------: | :---: | :------: | :--------: | :------: | :------: | :--------: | :------------------------------------------------------------------------------------------------------------------------------------------------: |
-|   python   | PyTorch 2.13.0+cu130 (CPU, 6 threads) |  990  | 1.810 ms |  4.440 ms  | 2.509 ms | 2.437 ms | 347.071 µs |                                                                         0                                                                          |
-|    rust    |       ndarray (matrixmultiply)        |  990  | 3.218 ms | 15.106 ms  | 4.587 ms | 4.270 ms |  1.279 ms  |                                                                         0                                                                          |
-|    rust    |              simd (wide)              |  990  | 2.756 ms |  7.729 ms  | 3.485 ms | 3.220 ms | 768.727 µs |                                                                         0                                                                          |
-|    rust    |            ndarray (BLAS)             |  990  | 1.501 ms | 139.782 ms | 9.494 ms | 2.486 ms | 16.498 ms  |                                                                         0                                                                          |
-| python@pi4 |                  pi4                  |   0   |    -     |     -      |    -     |    -     |     -      | remote python benchmark failed (exit 2): python3: can't open file '/home/david/ml-runner/benchmark_models.py': [Errno 2] No such file or directory |
-|  rust@pi4  |                default                |   0   |    -     |     -      |    -     |    -     |     -      |                                        remote cargo run failed (exit 127): zsh:1: command not found: cargo                                         |
-|  rust@pi4  |                 simd                  |   0   |    -     |     -      |    -     |    -     |     -      |                                        remote cargo run failed (exit 127): zsh:1: command not found: cargo                                         |
-|  rust@pi4  |                 blas                  |   0   |    -     |     -      |    -     |    -     |     -      |                                        remote cargo run failed (exit 127): zsh:1: command not found: cargo                                         |
+|  Runner  |                Backend                | Runs  |   Min    |    Max     |   Mean    |  Median   |   StdDev   | Errors |
+| :------: | :-----------------------------------: | :---: | :------: | :--------: | :-------: | :-------: | :--------: | :----: |
+|  python  | PyTorch 2.13.0+cu130 (CPU, 6 threads) |  990  | 1.769 ms | 32.579 ms  | 2.751 ms  | 2.473 ms  |  1.678 ms  |   0    |
+|   rust   |       ndarray (matrixmultiply)        |  990  | 2.973 ms |  6.049 ms  | 3.693 ms  | 3.531 ms  | 597.007 µs |   0    |
+|   rust   |              simd (wide)              |  990  | 2.571 ms |  7.891 ms  | 3.473 ms  | 3.287 ms  | 776.920 µs |   0    |
+|   rust   |            ndarray (BLAS)             |  990  | 1.395 ms | 197.835 ms | 32.119 ms | 16.692 ms | 37.198 ms  |   0    |
+| rust@pi4 |       ndarray (matrixmultiply)        |  990  | 9.712 ms | 14.942 ms  | 10.122 ms | 9.894 ms  | 669.368 µs |   0    |
+| rust@pi4 |              simd (wide)              |  990  | 9.617 ms | 16.837 ms  | 9.995 ms  | 9.822 ms  | 564.428 µs |   0    |
 
 
 
