@@ -26,27 +26,76 @@ Flow per model:
 At the end, all rows (all models, all backends, all devices) are:
   - saved to a combined JSON file (so results persist across executions)
 
+Configuration
+-------------
+By default, every setting is read from a JSON config file next to this
+script (benchmark_config.json), so once that file is set up you can just run:
+
+    python3 benchmark_models.py
+
+with no arguments at all. Example benchmark_config.json:
+
+{
+  "iterations": 1000,
+  "seed": 42,
+  "rust_dir": ".",
+  "rust_features": ["default", "simd", "blas"],
+  "work_dir": "bench_work",
+  "results_file": "combined_benchmark_results.json",
+  "skip_rust": false,
+  "local_project_dir": null,
+  "device_timeout": 1800,
+  "devices": [
+    {
+      "name": "pi4",
+      "host": "pi4",
+      "dir": "/home/pi/ml-runner",
+      "python": "python3",
+      "rust_dir": ".",
+      "features": ["default", "simd"],
+      "sync": true,
+      "skip_python": false,
+      "skip_rust": false
+    }
+  ]
+}
+
+Any field can be omitted (falls back to the same hardcoded default as
+before), and any CLI flag you do pass overrides the corresponding config
+value for that run - so quick one-off tweaks don't require editing the file.
+`--device` on the CLI replaces the "devices" list from the config entirely
+(rather than merging) for ad hoc overrides. Use `--config <path>` to point at
+a different config file; if no config file exists at all, the script just
+falls back to CLI flags/defaults exactly as before.
+
 How to run :
 
+# Simplest case: everything comes from ./benchmark_config.json
+python3 benchmark_models.py
+
+# Point at a different config file
+python3 benchmark_models.py --config ./configs/pi_only.json
+
 # Python-only, no Rust build/run at all
-python3 benchmark.py 200 --skip-rust
+python3 benchmark_models.py 200 --skip-rust
 
 # Only build/run one or two Rust feature sets instead of all three
-python3 benchmark.py --rust-features simd blas
+python3 benchmark_models.py --rust-features simd blas
 
 # Control where exported models/reports and the combined results land
-python3 benchmark.py --work-dir ./bench_work --results-file ./results/run1.json
+python3 benchmark_models.py --work-dir ./bench_work --results-file ./results/run1.json
 
 # Also benchmark on a Raspberry Pi reachable as `ssh pi4` (no login prompt),
-# with the project rsync'd to ~/ml-runner on the device
-python3 benchmark.py --device "name=pi4,host=pi4,dir=/home/pi/ml-runner"
+# with the project rsync'd to ~/ml-runner on the device - overrides any
+# "devices" list from the config file for this run
+python3 benchmark_models.py --device "name=pi4,host=pi4,dir=/home/pi/ml-runner"
 
 # Same, but skip blas on the Pi and don't re-sync the project each run
-python3 benchmark.py \
+python3 benchmark_models.py \
     --device "name=pi4,host=pi4,dir=/home/pi/ml-runner,features=default;simd,sync=0"
 
 # Multiple devices at once, each with their own overrides
-python3 benchmark.py \
+python3 benchmark_models.py \
     --device "name=pi4,host=pi4,dir=/home/pi/ml-runner" \
     --device "name=jetson,host=jetson-nano,dir=/home/jetson/ml-runner,python=python3.10"
 """
@@ -71,6 +120,10 @@ from ml_runner_exporter import export_onnx
 from python_fixtures.benchmark_fixtures import HugeLinearModel, LongLinearModel
 
 RUST_FEATURES = ["default", "simd", "blas"]
+
+# Default config file location: next to this script, so `python3
+# benchmark_models.py` with no arguments works regardless of cwd.
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "benchmark_config.json"
 
 # ssh/scp options shared by every remote invocation: fail fast instead of
 # hanging on a password prompt, and don't wait forever for a dead host.
@@ -330,6 +383,120 @@ def parse_device_spec(spec: str) -> RemoteDevice:
     )
 
 
+_DEVICE_CONFIG_REQUIRED_FIELDS = ("name", "host", "dir")
+_DEVICE_CONFIG_OPTIONAL_FIELDS = ("python", "rust_dir", "features", "sync", "skip_python", "skip_rust")
+_DEVICE_CONFIG_ALL_FIELDS = _DEVICE_CONFIG_REQUIRED_FIELDS + _DEVICE_CONFIG_OPTIONAL_FIELDS
+
+
+def device_from_config(entry: dict, source: str) -> RemoteDevice:
+    """Build a RemoteDevice from one object in a config file's "devices" list.
+    Same validation spirit as parse_device_spec: unknown keys, missing
+    required values, and wrong types are rejected immediately."""
+    if not isinstance(entry, dict):
+        raise ValueError(f"each item in \"devices\" in '{source}' must be an object, got {entry!r}")
+
+    unknown = [k for k in entry if k not in _DEVICE_CONFIG_ALL_FIELDS]
+    if unknown:
+        raise ValueError(
+            f"device entry in '{source}' has unrecognized field(s): {', '.join(unknown)}. " f"Recognized fields: {', '.join(_DEVICE_CONFIG_ALL_FIELDS)}"
+        )
+
+    missing = [k for k in _DEVICE_CONFIG_REQUIRED_FIELDS if not entry.get(k)]
+    if missing:
+        raise ValueError(f"device entry in '{source}' is missing required field(s): {', '.join(missing)}: {entry}")
+
+    name = entry["name"]
+    features = entry.get("features")
+    if features is not None and (not isinstance(features, list) or not all(isinstance(x, str) for x in features)):
+        raise ValueError(f"device '{name}' in '{source}': \"features\" must be a list of strings, got {features!r}")
+
+    for bool_key in ("sync", "skip_python", "skip_rust"):
+        if bool_key in entry and not isinstance(entry[bool_key], bool):
+            raise ValueError(f"device '{name}' in '{source}': \"{bool_key}\" must be true/false, got {entry[bool_key]!r}")
+
+    return RemoteDevice(
+        name=name,
+        host=entry["host"],
+        remote_dir=str(entry["dir"]).rstrip("/"),
+        python_bin=entry.get("python", "python3"),
+        rust_subdir=entry.get("rust_dir", "."),
+        rust_features=list(features) if features else None,
+        sync=entry.get("sync", True),
+        skip_python=entry.get("skip_python", False),
+        skip_rust=entry.get("skip_rust", False),
+    )
+
+
+_CONFIG_ALL_FIELDS = (
+    "iterations",
+    "seed",
+    "rust_dir",
+    "rust_features",
+    "work_dir",
+    "results_file",
+    "skip_rust",
+    "local_project_dir",
+    "device_timeout",
+    "devices",
+)
+
+
+def load_config_file(path: Path) -> dict:
+    """Load and lightly validate a benchmark_config.json. Raises ValueError
+    with a clear message on any problem (missing file, bad JSON, unrecognized
+    top-level key) rather than letting a typo pass silently."""
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        raise ValueError(f"config file '{path}' does not exist") from None
+    except json.JSONDecodeError as e:
+        raise ValueError(f"failed to parse config file '{path}': {e}") from e
+
+    if not isinstance(data, dict):
+        raise ValueError(f"config file '{path}' must contain a JSON object at the top level")
+
+    unknown = [k for k in data if k not in _CONFIG_ALL_FIELDS]
+    if unknown:
+        raise ValueError(
+            f"config file '{path}' has unrecognized top-level field(s): {', '.join(unknown)}. " f"Recognized fields: {', '.join(_CONFIG_ALL_FIELDS)}"
+        )
+
+    devices_raw = data.get("devices")
+    if devices_raw is not None:
+        if not isinstance(devices_raw, list):
+            raise ValueError(f"config file '{path}': \"devices\" must be a list")
+        # Validate eagerly (rather than lazily at use-time) so a bad device
+        # entry is reported before any benchmarking has started.
+        for entry in devices_raw:
+            device_from_config(entry, source=str(path))
+
+    return data
+
+
+def load_config(path: str) -> tuple[dict, list[RemoteDevice], Path | None]:
+    """Merge CLI args (highest priority when explicitly given) with the
+    config file (fallback), and hardcoded defaults (final fallback).
+    Returns (resolved_settings, devices, config_path_used)."""
+    config: dict = load_config_file(path)
+    devices = [device_from_config(entry, source=str(path)) for entry in config.get("devices", [])]
+
+    # post processing
+    resolved = {
+        "iterations": config.get("iterations", 1000),
+        "seed": config.get("seed") if config.get("seed") is not None else int(time.time()),
+        "rust_dir": Path(config.get("rust_dir", ".")),
+        "rust_features": config.get("rust_features", RUST_FEATURES),
+        "work_dir": Path(config.get("work_dir", "bench_work")),
+        "results_file": Path(config.get("results_file", "combined_benchmark_results.json")),
+        "skip_rust": config.get("skip_rust", False),
+        "local_project_dir": (Path(config["local_project_dir"]) if config.get("local_project_dir") else None),
+        "device_timeout": config.get("device_timeout", 1800),
+    }
+
+    return resolved, devices
+
+
 def run_remote_cmd(host: str, cwd: str, command: str, timeout: float | None = None) -> subprocess.CompletedProcess:
     full_cmd = f"cd {shlex.quote(cwd)} && {command}"
     return subprocess.run(["ssh", *SSH_OPTS, host, full_cmd], capture_output=True, text=True, timeout=timeout)
@@ -392,6 +559,41 @@ def sync_project_to_remote(local_root: Path, device: RemoteDevice, timeout: floa
     subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=timeout)
 
 
+def preflight_check_device(device: RemoteDevice, timeout: float | None = None) -> str | None:
+    """Run cheap remote checks before committing to a full rsync + benchmark
+    run: is the host reachable over ssh, and does it have what this device's
+    config says it will need (cargo for the Rust side, the configured Python
+    binary plus a `torch` install for the Python side)?
+
+    Returns an error message describing the first thing that's missing, or
+    None if the device looks ready. This exists so a typo'd python binary or
+    a Pi that never got `cargo`/`torch` installed fails in a few seconds,
+    instead of after several minutes of rsync-ing and building."""
+    checks = []
+    if not device.skip_rust:
+        checks.append("command -v cargo >/dev/null 2>&1 || echo __MISSING__:cargo")
+    if not device.skip_python:
+        py = shlex.quote(device.python_bin)
+        checks.append(f"command -v {py} >/dev/null 2>&1 || echo __MISSING__:'{device.python_bin}' (python interpreter)")
+        checks.append(f"{py} -c 'import torch' >/dev/null 2>&1 || echo __MISSING__:'torch' (python module)")
+    if not checks:
+        return None
+
+    remote_script = " ; ".join(checks)
+    try:
+        result = subprocess.run(["ssh", *SSH_OPTS, device.host, remote_script], capture_output=True, text=True, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError) as e:
+        return f"could not reach device for preflight check: {_err_tail(e)}"
+
+    missing = [line[len("__MISSING__:") :] for line in result.stdout.splitlines() if line.startswith("__MISSING__:")]
+    if missing:
+        return f"missing on device: {', '.join(missing)}"
+    if result.returncode != 0:
+        # ssh (or the shell it ran) failed outright - auth, unknown host, etc.
+        return f"ssh preflight check failed (exit {result.returncode}): {result.stderr.strip()[-300:]}"
+    return None
+
+
 def benchmark_model_remote_python(
     device: RemoteDevice, model_name: str, iterations: int, seed: int, local_work_dir: Path, timeout: float | None = None
 ) -> dict:
@@ -405,7 +607,7 @@ def benchmark_model_remote_python(
         return _remote_error_row(f"python@{device.name}", device.name, f"could not prepare remote scratch dir: {_err_tail(e)}")
 
     remote_results = f"{remote_scratch}/py_only_{model_name}.json"
-    cmd = f"{device.python_bin} benchmark.py {iterations} --seed {seed} " f"--skip-rust --results-file {shlex.quote(remote_results)}"
+    cmd = f"{device.python_bin} benchmark_models.py {iterations} --seed {seed} " f"--skip-rust --results-file {shlex.quote(remote_results)}"
 
     try:
         result = run_remote_cmd(device.host, device.remote_dir, cmd, timeout=timeout)
@@ -542,95 +744,53 @@ def main() -> None:
         "combined comparison table.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("iterations", nargs="?", type=int, default=1000, help="Timed forward passes per run (default: 1000)")
-    parser.add_argument("--seed", type=int, default=int(time.time()), help="Base seed for input generation and layer sizing")
     parser.add_argument(
-        "--rust-dir",
+        "--config",
         type=Path,
-        default=".",
-        help="Path to the Rust runner's Cargo project directory (containing Cargo.toml)",
-    )
-    parser.add_argument(
-        "--rust-features",
-        nargs="+",
-        default=RUST_FEATURES,
-        help=f"Rust feature sets to build+run locally (default: {RUST_FEATURES})",
-    )
-    parser.add_argument(
-        "--work-dir",
-        type=Path,
-        default=Path("bench_work"),
-        help="Scratch directory for exported models and JSON reports (default: ./bench_work)",
-    )
-    parser.add_argument(
-        "--results-file",
-        type=Path,
-        default=Path("combined_benchmark_results.json"),
-        help="Where to save the combined results as JSON (default: ./combined_benchmark_results.json)",
-    )
-    parser.add_argument("--skip-rust", action="store_true", help="Only run the local PyTorch benchmarks")
-    parser.add_argument(
-        "--device",
-        action="append",
-        default=[],
-        metavar="SPEC",
-        help=(
-            "Also benchmark on a remote device reachable via a plain, non-interactive "
-            "`ssh <host>` (e.g. an ~/.ssh/config alias like 'pi4'). Repeatable. SPEC is a "
-            "comma-separated key=value list: name=<label>,host=<ssh host/alias>,dir=<remote "
-            "project dir>[,python=<python bin, default python3>][,rust-dir=<Cargo project dir "
-            "relative to 'dir', default '.'>][,features=<semicolon-separated feature list, "
-            "default: same as --rust-features>][,sync=0|1 (default 1: rsync the local project "
-            "to the device first)][,skip-python=0|1][,skip-rust=0|1]. Example: "
-            '--device "name=pi4,host=pi4,dir=/home/pi/ml-runner"'
-        ),
-    )
-    parser.add_argument(
-        "--local-project-dir",
-        type=Path,
-        default=None,
-        help="Local project directory to rsync to each --device (default: this script's directory)",
-    )
-    parser.add_argument(
-        "--device-timeout",
-        type=float,
-        default=1800,
-        help="Timeout in seconds for each remote ssh/scp/rsync operation (default: 1800)",
+        default=DEFAULT_CONFIG_PATH,
+        metavar="PATH",
+        help=f"Path to a JSON config file with all settings (default: {DEFAULT_CONFIG_PATH.name} next to this script, if present)",
     )
     args = parser.parse_args()
 
-    try:
-        devices = [parse_device_spec(spec) for spec in args.device]
-    except ValueError as e:
-        parser.error(str(e))
-        return  # unreachable, parser.error() exits
+    settings, devices = load_config(args.config)
+    print(settings)
 
     torch.set_grad_enabled(False)
-    torch.manual_seed(args.seed)
-    random.seed(args.seed)
+    torch.manual_seed(settings["seed"])
+    random.seed(settings["seed"])
 
-    args.work_dir.mkdir(parents=True, exist_ok=True)
+    settings["work_dir"].mkdir(parents=True, exist_ok=True)
 
-    print(f"Iterations per run: {args.iterations} | seed: {args.seed}")
+    print(f"Config: {args.config}")
+    print(f"Iterations per run: {settings['iterations']} | seed: {settings['seed']}")
     print(f"PyTorch backend: {backend_name()}")
-    if not args.skip_rust:
-        print(f"Rust runner: {args.rust_dir} | features: {args.rust_features}")
+    if not settings["skip_rust"]:
+        print(f"Rust runner: {settings['rust_dir']} | features: {settings['rust_features']}")
     if devices:
         print(f"Devices: {[d.name for d in devices]}")
     print()
 
-    # Sync each device once up front (not once per model) so we don't rsync
-    # the whole project twice for two models. A device that fails to sync is
-    # marked broken and every row for it becomes an error row, rather than
-    # aborting the whole benchmark run.
-    local_project_dir = args.local_project_dir or Path(__file__).resolve().parent
+    # Preflight + sync each device once up front (not once per model) so we
+    # don't rsync the whole project twice for two models, and so a device
+    # that's missing cargo/python/torch fails in seconds rather than after a
+    # full build. A device that fails either step is marked broken and every
+    # row for it becomes an error row, rather than aborting the whole run.
+    local_project_dir = settings["local_project_dir"] or Path(__file__).resolve().parent
     device_errors: dict[str, str] = {}
     for device in devices:
+        print(f"Checking device '{device.name}' ({device.host})...")
+        preflight_error = preflight_check_device(device, timeout=settings["device_timeout"])
+        if preflight_error:
+            print(f"  WARNING: preflight check for '{device.name}' failed, will skip this device: {preflight_error}")
+            device_errors[device.name] = preflight_error
+            continue
+
         if not device.sync:
             continue
         print(f"Syncing project to device '{device.name}' ({device.host}:{device.remote_dir})...")
         try:
-            sync_project_to_remote(local_project_dir, device, timeout=args.device_timeout)
+            sync_project_to_remote(local_project_dir, device, timeout=settings["device_timeout"])
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
             msg = _err_tail(e)
             print(f"  WARNING: sync to '{device.name}' failed, will skip this device: {msg}")
@@ -648,34 +808,34 @@ def main() -> None:
 
     for idx, (name, model) in enumerate(models):
         input_dim = model.get_input_dims()  # type: ignore[operator]
-        seed = args.seed + idx
+        seed = settings["seed"] + idx
         rows = []
 
         # 1. Local PyTorch run.
         print(f"Running local PyTorch benchmark: {name}...")
-        local_row = benchmark_model_local(model, input_dim=input_dim, iterations=args.iterations, seed=seed, name=name)
+        local_row = benchmark_model_local(model, input_dim=input_dim, iterations=settings["iterations"], seed=seed, name=name)
         local_row["model"] = name
         rows.append(local_row)
 
         # 2. Export to the Rust runner's JSON model format, if needed either
         #    locally or by any device.
-        needs_export = (not args.skip_rust) or any(not d.skip_rust and d.name not in device_errors for d in devices)
+        needs_export = (not settings["skip_rust"]) or any(not d.skip_rust and d.name not in device_errors for d in devices)
         export_path = None
         if needs_export:
-            onnx_path = args.work_dir / f"{name}.onnx"
-            export_path = args.work_dir / f"{name}.json"
+            onnx_path = settings["work_dir"] / f"{name}.onnx"
+            export_path = settings["work_dir"] / f"{name}.json"
             print(f"Exporting {name} -> {export_path}...")
             export_and_run_model(model, input_dim, onnx_path=onnx_path, export_path=export_path)
 
         # 3. Local Rust runner, once per feature set.
-        if not args.skip_rust:
-            for feature in args.rust_features:
-                report_path = args.work_dir / f"{name}_{feature}.report.json"
+        if not settings["skip_rust"]:
+            for feature in settings["rust_features"]:
+                report_path = settings["work_dir"] / f"{name}_{feature}.report.json"
                 print(f"Running Rust benchmark: {name} [{feature}]...")
                 rust_row = run_rust_benchmark(
-                    rust_dir=args.rust_dir,
+                    rust_dir=settings["rust_dir"],
                     export_path=export_path,
-                    iterations=args.iterations,
+                    iterations=settings["iterations"],
                     feature=feature,
                     report_path=report_path,
                 )
@@ -694,22 +854,26 @@ def main() -> None:
                         "runs": 0,
                         "errors": None,
                         "model": name,
-                        "error_message": f"device sync failed, skipped: {device_errors[device.name]}",
+                        "error_message": f"device unavailable, skipped: {device_errors[device.name]}",
                     }
                 )
                 continue
 
             if not device.skip_python:
                 print(f"Running remote PyTorch benchmark: {name} on '{device.name}'...")
-                remote_py_row = benchmark_model_remote_python(device, name, args.iterations, seed, args.work_dir, timeout=args.device_timeout)
+                remote_py_row = benchmark_model_remote_python(
+                    device, name, settings["iterations"], seed, settings["work_dir"], timeout=settings["device_timeout"]
+                )
                 remote_py_row["model"] = name
                 rows.append(remote_py_row)
 
             if not device.skip_rust:
-                device_features = device.rust_features if device.rust_features is not None else args.rust_features
+                device_features = device.rust_features if device.rust_features is not None else settings["rust_features"]
                 for feature in device_features:
                     print(f"Running remote Rust benchmark: {name} [{feature}] on '{device.name}'...")
-                    remote_rust_row = run_rust_benchmark_remote(device, name, export_path, args.iterations, feature, args.work_dir, timeout=args.device_timeout)
+                    remote_rust_row = run_rust_benchmark_remote(
+                        device, name, export_path, settings["iterations"], feature, settings["work_dir"], timeout=settings["device_timeout"]
+                    )
                     remote_rust_row["model"] = name
                     rows.append(remote_rust_row)
 
@@ -720,19 +884,19 @@ def main() -> None:
     for output in output_to_print:
         print(output)
 
-    with open(args.results_file, "w") as f:
+    with open(settings["results_file"], "w") as f:
         json.dump(
             {
                 "timestamp": datetime.now(UTC).isoformat(),
-                "iterations": args.iterations,
-                "seed": args.seed,
+                "iterations": settings["iterations"],
+                "seed": settings["seed"],
                 "devices": [d.name for d in devices],
                 "results": results,
             },
             f,
             indent=2,
         )
-    print(f"\nSaved combined results to '{args.results_file}'.")
+    print(f"\nSaved combined results to '{settings['results_file']}'.")
 
 
 if __name__ == "__main__":

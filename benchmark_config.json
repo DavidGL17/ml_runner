@@ -1,0 +1,24 @@
+{
+  "iterations": 1000,
+  "seed": 1,
+  "rust_dir": ".",
+  "rust_features": ["default", "simd", "blas"],
+  "work_dir": "bench_work",
+  "results_file": "combined_benchmark_results.json",
+  "skip_rust": false,
+  "local_project_dir": null,
+  "device_timeout": 1800,
+  "devices": [
+    {
+      "name": "pi4",
+      "host": "pi4",
+      "dir": "/home/david/ml-runner",
+      "python": "python3",
+      "rust_dir": ".",
+      "features": null,
+      "sync": true,
+      "skip_python": false,
+      "skip_rust": false
+    }
+  ]
+}
