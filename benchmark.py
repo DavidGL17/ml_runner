@@ -296,72 +296,12 @@ class RemoteDevice:
     skip_python: bool = False
     skip_rust: bool = False
 
-
-_DEVICE_SPEC_REQUIRED_FIELDS = ("name", "host", "dir")
-_DEVICE_SPEC_OPTIONAL_FIELDS = ("python", "rust-dir", "features", "sync", "skip-python", "skip-rust")
-_DEVICE_SPEC_ALL_FIELDS = _DEVICE_SPEC_REQUIRED_FIELDS + _DEVICE_SPEC_OPTIONAL_FIELDS
-_DEVICE_SPEC_BOOL_TRUE = {"1", "true", "yes"}
-_DEVICE_SPEC_BOOL_FALSE = {"0", "false", "no"}
-
-
-def parse_device_spec(spec: str) -> RemoteDevice:
-    """Parse a --device SPEC string of the form:
-
-    'name=pi4,host=pi4,dir=/home/pi/ml-runner[,python=python3][,rust-dir=.]
-     [,features=default;simd][,sync=1][,skip-python=0][,skip-rust=0]'
-
-    Only name, host, and dir are required; everything else has a default.
-    Unknown keys, empty required values, and unrecognized boolean values are
-    all rejected up front rather than silently ignored/misinterpreted -
-    a typo here (e.g. 'dirs=' instead of 'dir=', or a wrong path) is much
-    easier to debug as an immediate error than as a confusing failure deep
-    into a benchmark run.
-    """
-    fields: dict[str, str] = {}
-    for chunk in spec.split(","):
-        chunk = chunk.strip()
-        if not chunk:
-            continue
-        if "=" not in chunk:
-            raise ValueError(f"invalid --device field '{chunk}' in spec '{spec}' (expected key=value)")
-        key, value = chunk.split("=", 1)
-        fields[key.strip().lower()] = value.strip()
-
-    unknown = [k for k in fields if k not in _DEVICE_SPEC_ALL_FIELDS]
-    if unknown:
-        raise ValueError(f"--device spec '{spec}' has unrecognized field(s): {', '.join(unknown)}. " f"Recognized fields: {', '.join(_DEVICE_SPEC_ALL_FIELDS)}")
-
-    missing = [k for k in _DEVICE_SPEC_REQUIRED_FIELDS if not fields.get(k)]
-    if missing:
-        raise ValueError(f"--device spec '{spec}' is missing required field(s): {', '.join(missing)}")
-
-    def as_bool(field_name: str, v: str) -> bool:
-        normalized = v.strip().lower()
-        if normalized in _DEVICE_SPEC_BOOL_TRUE:
-            return True
-        if normalized in _DEVICE_SPEC_BOOL_FALSE:
-            return False
-        raise ValueError(
-            f"--device spec '{spec}' has invalid value '{v}' for '{field_name}' "
-            f"(expected one of: {', '.join(sorted(_DEVICE_SPEC_BOOL_TRUE | _DEVICE_SPEC_BOOL_FALSE))})"
-        )
-
-    features = fields.get("features")
-    return RemoteDevice(
-        name=fields["name"],
-        host=fields["host"],
-        remote_dir=fields["dir"].rstrip("/"),
-        python_bin=fields.get("python", "python3"),
-        rust_subdir=fields.get("rust-dir", "."),
-        rust_features=[f for f in features.split(";") if f] if features else None,
-        sync=as_bool("sync", fields.get("sync", "1")),
-        skip_python=as_bool("skip-python", fields.get("skip-python", "0")),
-        skip_rust=as_bool("skip-rust", fields.get("skip-rust", "0")),
-    )
+    def python_invocation(self) -> str:
+        return f"poetry run {self.python_bin}"
 
 
 _DEVICE_CONFIG_REQUIRED_FIELDS = ("name", "host", "dir")
-_DEVICE_CONFIG_OPTIONAL_FIELDS = ("python", "rust_dir", "features", "sync", "skip_python", "skip_rust")
+_DEVICE_CONFIG_OPTIONAL_FIELDS = ("python", "poetry", "rust_dir", "features", "sync", "skip_python", "skip_rust")
 _DEVICE_CONFIG_ALL_FIELDS = _DEVICE_CONFIG_REQUIRED_FIELDS + _DEVICE_CONFIG_OPTIONAL_FIELDS
 
 
@@ -539,20 +479,29 @@ def sync_project_to_remote(local_root: Path, device: RemoteDevice, timeout: floa
 def preflight_check_device(device: RemoteDevice, timeout: float | None = None) -> str | None:
     """Run cheap remote checks before committing to a full rsync + benchmark
     run: is the host reachable over ssh, and does it have what this device's
-    config says it will need (cargo for the Rust side, the configured Python
-    binary plus a `torch` install for the Python side)?
+    config says it will need (cargo for the Rust side, Poetry for the python side)?
 
     Returns an error message describing the first thing that's missing, or
-    None if the device looks ready. This exists so a typo'd python binary or
-    a Pi that never got `cargo`/`torch` installed fails in a few seconds,
-    instead of after several minutes of rsync-ing and building."""
+    None if the device looks ready. This exists so a typo'd python binary, a
+    missing `poetry`, or a Pi that never got `cargo`/`torch` installed fails
+    in a few seconds, instead of after several minutes of rsync-ing and
+    building.
+
+    Every check message is built with shlex.quote so it is always passed to
+    `echo` as a single, fully-quoted argument - an earlier version left
+    trailing parentheses like `(python module)` unquoted, which some remote
+    login shells (e.g. zsh) parse as a subshell/glob qualifier instead of
+    literal text, causing a cryptic "unknown file attribute" failure.
+    """
     checks = []
     if not device.skip_rust:
         checks.append("command -v cargo >/dev/null 2>&1 || echo __MISSING__:cargo")
     if not device.skip_python:
         py = shlex.quote(device.python_bin)
-        checks.append(f"command -v {py} >/dev/null 2>&1 || echo __MISSING__:'{device.python_bin}' (python interpreter)")
-        checks.append(f"{py} -c 'import torch' >/dev/null 2>&1 || echo __MISSING__:'torch' (python module)")
+        poetry_msg = shlex.quote("poetry (required because 'poetry' is set for this device)")
+        checks.append(f"command -v poetry >/dev/null 2>&1 || echo __MISSING__:{poetry_msg}")
+        torch_msg = shlex.quote(f"torch (python module, checked via 'poetry run {device.python_bin}')")
+        checks.append(f"cd {shlex.quote(device.remote_dir)} && poetry run {py} -c 'import torch' >/dev/null 2>&1 || echo __MISSING__:{torch_msg}")
     if not checks:
         return None
 
@@ -561,6 +510,8 @@ def preflight_check_device(device: RemoteDevice, timeout: float | None = None) -
         result = subprocess.run(["ssh", *SSH_OPTS, device.host, remote_script], capture_output=True, text=True, timeout=timeout)
     except (subprocess.TimeoutExpired, OSError) as e:
         return f"could not reach device for preflight check: {_err_tail(e)}"
+    print(remote_script)
+    print(result)
 
     missing = [line[len("__MISSING__:") :] for line in result.stdout.splitlines() if line.startswith("__MISSING__:")]
     if missing:
@@ -584,7 +535,7 @@ def benchmark_model_remote_python(
         return _remote_error_row(f"python@{device.name}", device.name, f"could not prepare remote scratch dir: {_err_tail(e)}")
 
     remote_results = f"{remote_scratch}/py_only_{model_name}.json"
-    cmd = f"{device.python_bin} benchmark.py {iterations} --seed {seed} " f"--skip-rust --results-file {shlex.quote(remote_results)}"
+    cmd = f"{device.python_invocation()} benchmark.py {iterations} --seed {seed} " f"--skip-rust --results-file {shlex.quote(remote_results)}"
 
     try:
         result = run_remote_cmd(device.host, device.remote_dir, cmd, timeout=timeout)
