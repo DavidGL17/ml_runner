@@ -31,7 +31,7 @@ Configuration
 By default, every setting is read from a JSON config file next to this
 script (benchmark_config.json), so once that file is set up you can just run:
 
-    python3 benchmark_models.py
+    python3 benchmark.py
 
 with no arguments at all. Example benchmark_config.json:
 
@@ -71,33 +71,10 @@ falls back to CLI flags/defaults exactly as before.
 How to run :
 
 # Simplest case: everything comes from ./benchmark_config.json
-python3 benchmark_models.py
+python3 benchmark.py
 
 # Point at a different config file
-python3 benchmark_models.py --config ./configs/pi_only.json
-
-# Python-only, no Rust build/run at all
-python3 benchmark_models.py 200 --skip-rust
-
-# Only build/run one or two Rust feature sets instead of all three
-python3 benchmark_models.py --rust-features simd blas
-
-# Control where exported models/reports and the combined results land
-python3 benchmark_models.py --work-dir ./bench_work --results-file ./results/run1.json
-
-# Also benchmark on a Raspberry Pi reachable as `ssh pi4` (no login prompt),
-# with the project rsync'd to ~/ml-runner on the device - overrides any
-# "devices" list from the config file for this run
-python3 benchmark_models.py --device "name=pi4,host=pi4,dir=/home/pi/ml-runner"
-
-# Same, but skip blas on the Pi and don't re-sync the project each run
-python3 benchmark_models.py \
-    --device "name=pi4,host=pi4,dir=/home/pi/ml-runner,features=default;simd,sync=0"
-
-# Multiple devices at once, each with their own overrides
-python3 benchmark_models.py \
-    --device "name=pi4,host=pi4,dir=/home/pi/ml-runner" \
-    --device "name=jetson,host=jetson-nano,dir=/home/jetson/ml-runner,python=python3.10"
+python3 benchmark.py --config ./configs/pi_only.json
 """
 
 import argparse
@@ -122,7 +99,7 @@ from python_fixtures.benchmark_fixtures import HugeLinearModel, LongLinearModel
 RUST_FEATURES = ["default", "simd", "blas"]
 
 # Default config file location: next to this script, so `python3
-# benchmark_models.py` with no arguments works regardless of cwd.
+# benchmark.py` with no arguments works regardless of cwd.
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "benchmark_config.json"
 
 # ssh/scp options shared by every remote invocation: fail fast instead of
@@ -607,7 +584,7 @@ def benchmark_model_remote_python(
         return _remote_error_row(f"python@{device.name}", device.name, f"could not prepare remote scratch dir: {_err_tail(e)}")
 
     remote_results = f"{remote_scratch}/py_only_{model_name}.json"
-    cmd = f"{device.python_bin} benchmark_models.py {iterations} --seed {seed} " f"--skip-rust --results-file {shlex.quote(remote_results)}"
+    cmd = f"{device.python_bin} benchmark.py {iterations} --seed {seed} " f"--skip-rust --results-file {shlex.quote(remote_results)}"
 
     try:
         result = run_remote_cmd(device.host, device.remote_dir, cmd, timeout=timeout)
