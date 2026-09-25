@@ -336,12 +336,12 @@ def device_from_config(entry: dict, source: str) -> RemoteDevice:
     Same validation spirit as parse_device_spec: unknown keys, missing
     required values, and wrong types are rejected immediately."""
     if not isinstance(entry, dict):
-        raise ValueError(f"each item in \"devices\" in '{source}' must be an object, got {entry!r}")
+        raise TypeError(f"each item in \"devices\" in '{source}' must be an object, got {entry!r}")
 
     unknown = [k for k in entry if k not in _DEVICE_CONFIG_ALL_FIELDS]
     if unknown:
         raise ValueError(
-            f"device entry in '{source}' has unrecognized field(s): {', '.join(unknown)}. " f"Recognized fields: {', '.join(_DEVICE_CONFIG_ALL_FIELDS)}"
+            f"device entry in '{source}' has unrecognized field(s): {', '.join(unknown)}. Recognized fields: {', '.join(_DEVICE_CONFIG_ALL_FIELDS)}"
         )
 
     missing = [k for k in _DEVICE_CONFIG_REQUIRED_FIELDS if not entry.get(k)]
@@ -397,13 +397,11 @@ def load_config_file(path: Path) -> dict:
         raise ValueError(f"failed to parse config file '{path}': {e}") from e
 
     if not isinstance(data, dict):
-        raise ValueError(f"config file '{path}' must contain a JSON object at the top level")
+        raise TypeError(f"config file '{path}' must contain a JSON object at the top level")
 
     unknown = [k for k in data if k not in _CONFIG_ALL_FIELDS]
     if unknown:
-        raise ValueError(
-            f"config file '{path}' has unrecognized top-level field(s): {', '.join(unknown)}. " f"Recognized fields: {', '.join(_CONFIG_ALL_FIELDS)}"
-        )
+        raise ValueError(f"config file '{path}' has unrecognized top-level field(s): {', '.join(unknown)}. Recognized fields: {', '.join(_CONFIG_ALL_FIELDS)}")
 
     devices_raw = data.get("devices")
     if devices_raw is not None:
@@ -417,11 +415,11 @@ def load_config_file(path: Path) -> dict:
     return data
 
 
-def load_config(path: str) -> tuple[dict, list[RemoteDevice], Path | None]:
+def load_config(path: str) -> tuple[dict, list[RemoteDevice]]:
     """Merge CLI args (highest priority when explicitly given) with the
     config file (fallback), and hardcoded defaults (final fallback).
-    Returns (resolved_settings, devices, config_path_used)."""
-    config: dict = load_config_file(path)
+    Returns (resolved_settings, devices)."""
+    config: dict = load_config_file(Path(path))
     devices = [device_from_config(entry, source=str(path)) for entry in config.get("devices", [])]
 
     # post processing
@@ -457,12 +455,12 @@ def _wrap_login_shell(command: str) -> str:
 
 def run_remote_cmd(host: str, cwd: str, command: str, timeout: float | None = None) -> subprocess.CompletedProcess:
     full_cmd = f"cd {shlex.quote(cwd)} && {command}"
-    return subprocess.run(["ssh", *SSH_OPTS, host, _wrap_login_shell(full_cmd)], capture_output=True, text=True, timeout=timeout)
+    return subprocess.run(["ssh", *SSH_OPTS, host, _wrap_login_shell(full_cmd)], capture_output=True, text=True, timeout=timeout, check=False)  # noqa :S607
 
 
 def ensure_remote_dir(host: str, path: str, timeout: float | None = 30) -> None:
     subprocess.run(
-        ["ssh", *SSH_OPTS, host, f"mkdir -p {shlex.quote(path)}"],
+        ["ssh", *SSH_OPTS, host, f"mkdir -p {shlex.quote(path)}"],  # noqa :S607
         check=True,
         capture_output=True,
         text=True,
@@ -472,7 +470,7 @@ def ensure_remote_dir(host: str, path: str, timeout: float | None = 30) -> None:
 
 def scp_to_remote(local_path: Path, host: str, remote_path: str, timeout: float | None = None) -> None:
     subprocess.run(
-        ["scp", *SSH_OPTS, str(local_path), f"{host}:{remote_path}"],
+        ["scp", *SSH_OPTS, str(local_path), f"{host}:{remote_path}"],  # noqa :S607
         check=True,
         capture_output=True,
         text=True,
@@ -482,7 +480,7 @@ def scp_to_remote(local_path: Path, host: str, remote_path: str, timeout: float 
 
 def scp_from_remote(host: str, remote_path: str, local_path: Path, timeout: float | None = None) -> None:
     subprocess.run(
-        ["scp", *SSH_OPTS, f"{host}:{remote_path}", str(local_path)],
+        ["scp", *SSH_OPTS, f"{host}:{remote_path}", str(local_path)],  # noqa :S607
         check=True,
         capture_output=True,
         text=True,
@@ -556,7 +554,9 @@ def preflight_check_device(device: RemoteDevice, timeout: float | None = None) -
 
     remote_script = " ; ".join(checks)
     try:
-        result = subprocess.run(["ssh", *SSH_OPTS, device.host, _wrap_login_shell(remote_script)], capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(
+            ["ssh", *SSH_OPTS, device.host, _wrap_login_shell(remote_script)], capture_output=True, text=True, timeout=timeout, check=False  # noqa :S607
+        )
     except (subprocess.TimeoutExpired, OSError) as e:
         return f"could not reach device for preflight check: {_err_tail(e)}"
 
@@ -569,7 +569,7 @@ def preflight_check_device(device: RemoteDevice, timeout: float | None = None) -
     return None
 
 
-def provision_device_poetry_env(device: RemoteDevice, local_project_dir: Path, timeout: float | None = None) -> str | None:
+def provision_device_poetry_env(device: RemoteDevice, local_project_dir: Path, timeout: float | None = None) -> str | None:  # noqa :PLR0911
     """Copy the local pyproject.toml (and poetry.lock, if present) to
     `device.remote_dir`, then run `poetry install` there.
 
@@ -619,7 +619,7 @@ def provision_device_poetry_env(device: RemoteDevice, local_project_dir: Path, t
     return None
 
 
-def benchmark_model_remote_python(
+def benchmark_model_remote_python(  # noqa :PLR0911
     device: RemoteDevice, model_name: str, iterations: int, seed: int, local_work_dir: Path, timeout: float | None = None
 ) -> dict:
     """Run the PyTorch benchmark for one model on a remote device, by
@@ -682,9 +682,9 @@ def benchmark_model_remote_python(
             continue
         for row in model_result.get("results", []):
             if row.get("runner") == "python":
-                row = dict(row)
-                row["runner"] = f"python@{device.name}"
-                return row
+                dict_row = dict(row)
+                dict_row["runner"] = f"python@{device.name}"
+                return dict_row
 
     return _remote_error_row(f"python@{device.name}", device.name, "remote results file did not contain a python row for this model")
 
@@ -786,7 +786,7 @@ def print_results(result: dict) -> str:
     return output + "\n".join(lines) + "\n"
 
 
-def main() -> None:
+def main() -> None:  # noqa :C901, PLR0915, PLR0912
     parser = argparse.ArgumentParser(
         description="Benchmark HugeLinearModel/LongLinearModel in PyTorch and in the Rust runner "
         "(default/simd/blas), locally and optionally on remote SSH devices, and print one "
@@ -897,7 +897,7 @@ def main() -> None:
                 print(f"Running Rust benchmark: {name} [{feature}]...")
                 rust_row = run_rust_benchmark(
                     rust_dir=settings["rust_dir"],
-                    export_path=export_path,
+                    export_path=export_path,  # type: ignore[arg-type]
                     iterations=settings["iterations"],
                     feature=feature,
                     report_path=report_path,
@@ -935,7 +935,7 @@ def main() -> None:
                 for feature in device_features:
                     print(f"Running remote Rust benchmark: {name} [{feature}] on '{device.name}'...")
                     remote_rust_row = run_rust_benchmark_remote(
-                        device, name, export_path, settings["iterations"], feature, settings["work_dir"], timeout=settings["device_timeout"]
+                        device, name, export_path, settings["iterations"], feature, settings["work_dir"], timeout=settings["device_timeout"]  # type: ignore[arg-type]
                     )
                     remote_rust_row["model"] = name
                     rows.append(remote_rust_row)
