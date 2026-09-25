@@ -426,7 +426,7 @@ def load_config(path: str) -> tuple[dict, list[RemoteDevice], Path | None]:
 
     # post processing
     resolved = {
-        "iterations": config.get("iterations", 1000),
+        "iterations": config.get("iterations", 200),
         "seed": config.get("seed") if config.get("seed") is not None else int(time.time()),
         "rust_dir": Path(config.get("rust_dir", ".")),
         "rust_features": config.get("rust_features", RUST_FEATURES),
@@ -511,6 +511,14 @@ def sync_project_to_remote(local_root: Path, device: RemoteDevice, timeout: floa
         "bench_work",
         "--exclude",
         "*.onnx",
+        # Deliberately excluded so rsync's --delete never touches it: this
+        # file is device-local config (e.g. `pyenv local 3.14` on a Pi
+        # running a newer/older system Python than your dev machine), not
+        # part of the project itself, and won't exist in most local repos.
+        # Without this exclude, --delete removes it on every sync since it
+        # has no local counterpart to mirror.
+        "--exclude",
+        ".python-version",
         f"{local_root}/",
         f"{device.host}:{device.remote_dir}/",
     ]
@@ -624,7 +632,31 @@ def benchmark_model_remote_python(
         return _remote_error_row(f"python@{device.name}", device.name, f"could not prepare remote scratch dir: {_err_tail(e)}")
 
     remote_results = f"{remote_scratch}/py_only_{model_name}.json"
-    cmd = f"{device.python_invocation()} benchmark.py {iterations} --seed {seed} " f"--skip-rust --results-file {shlex.quote(remote_results)}"
+
+    # The remote script's CLI is config-file only (just --config) - it no
+    # longer takes positional iterations or --seed/--skip-rust/--results-file
+    # flags, so write a small standalone config and point --config at it
+    # rather than building an old-style command line. "devices" is
+    # deliberately left out, so this run can't recurse into a devices list
+    # even if the synced project ships its own benchmark_config.json next to
+    # benchmark.py on the device.
+    remote_config = {
+        "iterations": iterations,
+        "seed": seed,
+        "skip_rust": True,
+        "results_file": remote_results,
+    }
+    local_config_path = local_work_dir / f"py_only_{model_name}_{device.name}.config.json"
+    with open(local_config_path, "w") as f:
+        json.dump(remote_config, f)
+
+    remote_config_path = f"{remote_scratch}/py_only_{model_name}.config.json"
+    try:
+        scp_to_remote(local_config_path, device.host, remote_config_path, timeout=timeout)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        return _remote_error_row(f"python@{device.name}", device.name, f"failed to upload remote config: {_err_tail(e)}")
+
+    cmd = f"{device.python_invocation()} benchmark.py --config {shlex.quote(remote_config_path)}"
 
     try:
         result = run_remote_cmd(device.host, device.remote_dir, cmd, timeout=timeout)

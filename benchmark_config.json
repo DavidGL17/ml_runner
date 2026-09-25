@@ -1,5 +1,5 @@
 {
-  "iterations": 1000,
+  "iterations": 500,
   "seed": 1,
   "rust_dir": ".",
   "rust_features": ["default", "simd", "blas"],
