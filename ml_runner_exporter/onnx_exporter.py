@@ -1,3 +1,4 @@
+import numpy as np
 import onnx
 from onnx import GraphProto, NodeProto, numpy_helper, shape_inference
 
@@ -46,6 +47,51 @@ def _compute_io_specs(graph: GraphProto) -> tuple[list[dict], list[dict]]:
     return inputs, outputs
 
 
+def _resolve_constant_nodes(graph: GraphProto, weights: dict, tensor_shapes: dict) -> set[str]:
+    """A `Constant` node bakes a literal tensor value directly into the
+    node itself (via a `value`-style attribute) instead of referencing a
+    graph-level initializer. Tracing exporters emit these liberally for
+    anything from a folded scalar to an entire computed tensor - e.g. a
+    shape-manipulation constant feeding `Reshape`/`Gather`, or a scalar
+    operand of an `Add`/`Mul`.
+
+    Like a constant-wrapping `Identity` (see `_resolve_constant_identities`),
+    a `Constant` node has no Rust-side `Layer` equivalent: it's not
+    forward-pass computation, just a literal value. This decodes each
+    node's value into an ndarray, registers it in `weights`/`tensor_shapes`
+    under the node's output name exactly like a real initializer, and
+    returns the node names to drop from the emitted graph.
+    """
+    skip_node_names = set()
+    for i, node in enumerate(graph.node):
+        if node.op_type != "Constant":
+            continue
+
+        attrs = {a.name: a for a in node.attribute}
+        if "value" in attrs:
+            array = numpy_helper.to_array(attrs["value"].t)
+        elif "value_float" in attrs:
+            array = np.array(attrs["value_float"].f, dtype=np.float32)
+        elif "value_floats" in attrs:
+            array = np.array(list(attrs["value_floats"].floats), dtype=np.float32)
+        elif "value_int" in attrs:
+            array = np.array(attrs["value_int"].i, dtype=np.int64)
+        elif "value_ints" in attrs:
+            array = np.array(list(attrs["value_ints"].ints), dtype=np.int64)
+        else:
+            raise ValueError(
+                f"Constant node '{node.name or i}' uses an unsupported attribute variant "
+                f"{sorted(attrs)}; only 'value'/'value_float(s)'/'value_int(s)' are supported"
+            )
+
+        dst = node.output[0]
+        weights[dst] = array
+        tensor_shapes[dst] = array.shape
+        skip_node_names.add(node.name or f"node_{i}")
+
+    return skip_node_names
+
+
 def _resolve_constant_identities(graph: GraphProto, weights: dict, tensor_shapes: dict) -> set[str]:
     """Some exporters (notably PyTorch's legacy TorchScript-based ONNX
     exporter) emit `Identity` nodes that just re-wrap a constant/parameter
@@ -77,6 +123,54 @@ def _resolve_constant_identities(graph: GraphProto, weights: dict, tensor_shapes
         weights[dst] = weights[src]
         if src in tensor_shapes:
             tensor_shapes[dst] = tensor_shapes[src]
+        skip_node_names.add(node.name or f"node_{i}")
+
+    return skip_node_names
+
+
+def _resolve_unsqueeze_axes(node: NodeProto, weights: dict) -> list[int]:
+    """`axes` is an attribute on opset < 13, or a second (constant) input
+    tensor on opset >= 13 - handle either, matching how the rest of this
+    exporter already reads dual-representation ONNX attributes (see e.g.
+    Conv2DLayerParser's kernel_shape/strides/pads).
+    """
+    for attr in node.attribute:
+        if attr.name == "axes":
+            return list(attr.ints)
+    if len(node.input) > 1 and node.input[1] in weights:
+        return [int(a) for a in weights[node.input[1]].flatten()]
+    raise ValueError(f"Unsqueeze node '{node.name}' has no constant 'axes' to fold")
+
+
+def _resolve_constant_unsqueezes(graph: GraphProto, weights: dict, tensor_shapes: dict) -> set[str]:
+    """Same idea as `_resolve_constant_identities`: some exporters wrap a
+    constant/parameter in an `Unsqueeze` - e.g. reshaping a frozen
+    buffer's rank to line up with a downstream op, or the classic
+    `Shape -> Gather -> Unsqueeze -> Concat -> Reshape` dynamic-shape
+    chain once the gathered value happens to be statically known - rather
+    than only ever applying it to a genuine activation.
+
+    Unsqueezing an already-known constant is a compile-time reshape, not
+    real forward-pass computation, so it's resolved here (via
+    `np.expand_dims`) into `weights`/`tensor_shapes` under the node's
+    output name, and the node is dropped from the emitted graph - same as
+    the other constant-folding passes.
+    """
+    skip_node_names = set()
+    for i, node in enumerate(graph.node):
+        if node.op_type != "Unsqueeze":
+            continue
+        src = node.input[0]
+        if src not in weights:
+            continue  # a genuine data-flow Unsqueeze - let UnsqueezeLayerParser handle it
+
+        array = weights[src]
+        for axis in sorted(_resolve_unsqueeze_axes(node, weights)):
+            array = np.expand_dims(array, axis=axis)
+
+        dst = node.output[0]
+        weights[dst] = array
+        tensor_shapes[dst] = array.shape
         skip_node_names.add(node.name or f"node_{i}")
 
     return skip_node_names
@@ -173,7 +267,13 @@ def export_onnx(model_path: str) -> dict:
     weights = {init.name: numpy_helper.to_array(init) for init in graph.initializer}
     inputs, outputs = _compute_io_specs(graph)
 
-    skip_node_names = _resolve_constant_identities(graph, weights, tensor_shapes)
+    # Order matters here: constants must be folded into `weights` first, so
+    # that a Constant -> Identity or Constant -> Unsqueeze chain (rewrapping
+    # a literal under another name/shape) is recognized regardless of where
+    # each node sits in the graph.
+    skip_node_names = _resolve_constant_nodes(graph, weights, tensor_shapes)
+    skip_node_names |= _resolve_constant_identities(graph, weights, tensor_shapes)
+    skip_node_names |= _resolve_constant_unsqueezes(graph, weights, tensor_shapes)
 
     nodes = [
         _build_node(node, _parse_node(node, tensor_shapes, weights), weights, i)

@@ -12,6 +12,7 @@ mod rnn;
 mod shape;
 mod tensor;
 mod transpose;
+mod unsqueeze;
 
 use crate::model::Model;
 use crate::tensor::{Tensor, TensorShape};

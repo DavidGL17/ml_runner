@@ -23,13 +23,23 @@ class ShapeLayerParser(LayerParser):
         node: The ONNX node object.
         tensor_shapes: The dictionary containing shapes of all tensors in the graph.
         """
-        # 1. Get the shape of the input tensor
+        # The input is a genuine activation, so its recorded ONNX shape
+        # carries a leading batch dimension - drop it to get the per-sample
+        # shape the Rust runtime works with.
         input_name = node.input[0]
-        input_shape = dims_to_tensor_shape(tuple(tensor_shapes.get(input_name, ())[1:]))
+        input_dims = tuple(tensor_shapes.get(input_name, ())[1:])
+        input_shape = dims_to_tensor_shape(input_dims)
 
-        # 2. Get the shape of the output tensor
-        # The output of a Shape node is always a 1D tensor with length = rank of input
-        output_name = node.output[0]
-        output_shape = dims_to_tensor_shape(tuple(tensor_shapes.get(output_name, ())[1:]))
+        # Unlike input_shape, this is NOT a batch-carrying activation shape
+        # to drop a dimension from. ONNX's Shape op always outputs a 1-D
+        # vector whose *length* equals the input's rank (e.g. an
+        # (N, C, H, W) input -> a 4-element output vector) - that vector
+        # has no batch dimension of its own. Since the Rust runtime works
+        # per-sample (no batch dim in its tensors at all), the layer
+        # reports the per-sample rank: the number of dims left in
+        # `input_dims` above, not whatever ONNX/shape_inference recorded
+        # for the output tensor's own shape (which describes the same
+        # thing under a different, batch-inclusive convention).
+        output_shape = dims_to_tensor_shape((len(input_dims),))
 
         return cls(input_shape=input_shape, output_shape=output_shape)

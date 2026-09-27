@@ -888,6 +888,10 @@ def main() -> None:  # noqa :C901, PLR0915, PLR0912
         print()
 
     models = [
+        # A 2-layer LSTM (Hochreiter & Schmidhuber, 1997) classifier over a
+        # short synthetic sequence - the recurrent counterpart to the conv
+        # and dense models above.
+        ("LSTMClassifier", LSTMClassifier()),
         # Classic dense-only baseline from LeCun et al. 1998: three Linear
         # layers over a flattened 28x28 input (784 -> 300 -> 100 -> 10).
         ("LeNet300100", LeNet300100()),

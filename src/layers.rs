@@ -10,6 +10,7 @@ use crate::rnn::{GRULayer, RNNLayer};
 use crate::shape::ShapeLayer;
 use crate::tensor::{Tensor, TensorShape};
 use crate::transpose::TransposeLayer;
+use crate::unsqueeze::UnsqueezeLayer;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -64,6 +65,7 @@ define_layers! {
     Gather(GatherLayer) => "gather",
     Shape(ShapeLayer) => "shape",
     Transpose(TransposeLayer) => "transpose",
+    Unsqueeze(UnsqueezeLayer) => "unsqueeze",
 }
 
 impl Layer {
@@ -88,6 +90,7 @@ impl Layer {
             Layer::Gather(layer) => layer.forward(inputs[0]),
             Layer::Shape(layer) => layer.forward(inputs[0]),
             Layer::Transpose(layer) => layer.forward(inputs[0]),
+            Layer::Unsqueeze(layer) => layer.forward(inputs[0]),
         }
     }
 }
@@ -188,14 +191,7 @@ mod tests {
         let input = Tensor::new(vec![1.0, 5.0, 3.0, 2.0], layer.input_shape());
         let output = layer.forward(&[&input]);
 
-        assert_eq!(
-            output.shape(),
-            TensorShape::D3 {
-                dim1: 1,
-                dim2: 1,
-                dim3: 1
-            }
-        );
+        assert_eq!(output.shape(), TensorShape::D3 { dim1: 1, dim2: 1, dim3: 1 });
         assert_eq!(output.to_vec(), vec![5.0]);
     }
 
@@ -336,6 +332,20 @@ mod tests {
         assert_eq!(output.shape(), TensorShape::Flat(2));
         // row 1 of the input
         assert_eq!(output.to_vec(), vec![3.0, 4.0]);
+    }
+
+    #[test]
+    fn test_unsqueeze_layer_enum_dispatch() {
+        let layer = Layer::Unsqueeze(UnsqueezeLayer {
+            input_shape: TensorShape::Flat(3),
+            output_shape: TensorShape::D2 { dim1: 1, dim2: 3 },
+        });
+
+        let input = Tensor::new(vec![1.0, 2.0, 3.0], layer.input_shape());
+        let output = layer.forward(&[&input]);
+
+        assert_eq!(output.shape(), TensorShape::D2 { dim1: 1, dim2: 3 });
+        assert_eq!(output.to_vec(), vec![1.0, 2.0, 3.0]);
     }
 
     #[test]

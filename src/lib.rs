@@ -10,6 +10,7 @@ mod maxpool;
 mod rnn;
 mod shape;
 mod transpose;
+mod unsqueeze;
 
 pub mod model;
 pub mod tensor;
