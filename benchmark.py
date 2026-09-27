@@ -884,11 +884,11 @@ def main() -> None:  # noqa :C901, PLR0915, PLR0912
     models = [
         # Classic dense-only baseline from LeCun et al. 1998: three Linear
         # layers over a flattened 28x28 input (784 -> 300 -> 100 -> 10).
-        ("LeNet300100", LeNet300100()),  # type: ignore[no-untyped-call]
+        ("LeNet300100", LeNet300100()),
         # Classic conv architecture from the same paper: two Conv2d+MaxPool2d
         # stages over a 32x32 single-channel input, feeding into three Linear
         # layers.
-        ("LeNet5", LeNet5()),  # type: ignore[no-untyped-call]
+        ("LeNet5", LeNet5()),
     ]
 
     results = []
