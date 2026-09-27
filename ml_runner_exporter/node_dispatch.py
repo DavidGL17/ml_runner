@@ -3,11 +3,11 @@ from ml_runner_exporter.layer import LayerParser
 from ml_runner_exporter.layers.activation import ActivationLayerParser
 from ml_runner_exporter.layers.conv import Conv2DLayerParser
 from ml_runner_exporter.layers.flatten import FlattenLayerParser
-from ml_runner_exporter.layers.onnx.identity import IdentityLayerParser
 from ml_runner_exporter.layers.linear import LinearLayerParser
 from ml_runner_exporter.layers.maxpool import MaxPool2DLayerParser
 from ml_runner_exporter.layers.onnx.add import AddLayerParser
 from ml_runner_exporter.layers.onnx.gather import GatherLayerParser
+from ml_runner_exporter.layers.onnx.identity import IdentityLayerParser
 from ml_runner_exporter.layers.onnx.shape import ShapeLayerParser
 from ml_runner_exporter.layers.onnx.transpose import TransposeLayerParser
 from ml_runner_exporter.layers.onnx.unsqueeze import UnsqueezeLayerParser
