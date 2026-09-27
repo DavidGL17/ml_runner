@@ -9,16 +9,6 @@
   "local_project_dir": null,
   "device_timeout": 1800,
   "devices": [
-    {
-      "name": "pi4",
-      "host": "pi4",
-      "dir": "/home/david/ml-runner",
-      "python": "python3",
-      "rust_dir": ".",
-      "features": null,
-      "sync": true,
-      "skip_python": false,
-      "skip_rust": false
-    }
+    
   ]
 }

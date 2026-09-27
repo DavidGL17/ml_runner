@@ -46,6 +46,42 @@ def _compute_io_specs(graph: GraphProto) -> tuple[list[dict], list[dict]]:
     return inputs, outputs
 
 
+def _resolve_constant_identities(graph: GraphProto, weights: dict, tensor_shapes: dict) -> set[str]:
+    """Some exporters (notably PyTorch's legacy TorchScript-based ONNX
+    exporter) emit `Identity` nodes that just re-wrap a constant/parameter
+    under a new name - e.g. a frozen BatchNorm buffer folded during
+    tracing - rather than passing an actual activation tensor through.
+
+    Such a node has no Rust-side equivalent: it isn't real forward-pass
+    computation, just a rename of something that's already in `weights`.
+    Treating it like a genuine data-flow `Identity` (as `IdentityLayerParser`
+    does) breaks, because a raw parameter's shape has no batch dimension
+    to drop in the first place - e.g. a `(64,)` BatchNorm scale, not a
+    `(N, 64, H, W)` activation.
+
+    This registers each such alias back into `weights` (and `tensor_shapes`,
+    when known) so any downstream node reading the alias is treated exactly
+    like it read the original initializer, and returns the set of node
+    names that should be dropped from the emitted graph entirely, since
+    they don't correspond to any runtime `Layer`.
+    """
+    skip_node_names = set()
+    for i, node in enumerate(graph.node):
+        if node.op_type != "Identity":
+            continue
+        src = node.input[0]
+        if src not in weights:
+            continue  # a genuine data-flow Identity - let IdentityLayerParser handle it
+
+        dst = node.output[0]
+        weights[dst] = weights[src]
+        if src in tensor_shapes:
+            tensor_shapes[dst] = tensor_shapes[src]
+        skip_node_names.add(node.name or f"node_{i}")
+
+    return skip_node_names
+
+
 def _data_tensor_names(node: NodeProto, weights: dict) -> list[str]:
     """The subset of `node.input` that are actual data-flow tensors (an
     upstream node's output, or a graph input) rather than a weight/bias
@@ -134,6 +170,12 @@ def export_onnx(model_path: str) -> dict:
     weights = {init.name: numpy_helper.to_array(init) for init in graph.initializer}
     inputs, outputs = _compute_io_specs(graph)
 
-    nodes = [_build_node(node, _parse_node(node, tensor_shapes, weights), weights, i) for i, node in enumerate(graph.node)]
+    skip_node_names = _resolve_constant_identities(graph, weights, tensor_shapes)
+
+    nodes = [
+        _build_node(node, _parse_node(node, tensor_shapes, weights), weights, i)
+        for i, node in enumerate(graph.node)
+        if (node.name or f"node_{i}") not in skip_node_names
+    ]
 
     return export_model(nodes, inputs, outputs)

@@ -115,7 +115,13 @@ import torch.onnx as torch_onnx
 from torch import nn
 
 from ml_runner_exporter import export_onnx
-from python_fixtures.benchmark_fixtures import LeNet5, LeNet300100
+from python_fixtures.benchmark_fixtures import (
+    AlexNetLite,
+    LeNet5,
+    LeNet300100,
+    LSTMClassifier,
+    ResNet18Cifar,
+)
 
 RUST_FEATURES = ["default", "simd", "blas"]
 
@@ -889,6 +895,18 @@ def main() -> None:  # noqa :C901, PLR0915, PLR0912
         # stages over a 32x32 single-channel input, feeding into three Linear
         # layers.
         ("LeNet5", LeNet5()),
+        # ResNet-18 (He et al. 2015): 8 BasicBlocks (2 per stage x 4 stages),
+        # conv + BatchNorm + residual add throughout. CIFAR-sized stem/input
+        # so a full run stays quick.
+        ("ResNet18Cifar", ResNet18Cifar()),
+        # A 2-layer LSTM (Hochreiter & Schmidhuber, 1997) classifier over a
+        # short synthetic sequence - the recurrent counterpart to the conv
+        # and dense models above.
+        ("LSTMClassifier", LSTMClassifier()),
+        # AlexNet (Krizhevsky et al. 2012)-style: 5 conv layers + 3 Linear
+        # layers, scaled down to a 64x64 input so 1000 iterations stay
+        # reasonable on something like a Raspberry Pi.
+        ("AlexNetLite", AlexNetLite()),
     ]
 
     results = []

@@ -3,6 +3,7 @@ from ml_runner_exporter.layer import LayerParser
 from ml_runner_exporter.layers.activation import ActivationLayerParser
 from ml_runner_exporter.layers.conv import Conv2DLayerParser
 from ml_runner_exporter.layers.flatten import FlattenLayerParser
+from ml_runner_exporter.layers.onnx.identity import IdentityLayerParser
 from ml_runner_exporter.layers.linear import LinearLayerParser
 from ml_runner_exporter.layers.maxpool import MaxPool2DLayerParser
 from ml_runner_exporter.layers.onnx.add import AddLayerParser
@@ -45,6 +46,10 @@ def _handle_flatten_reshape(ctx: NodeContext) -> LayerParser:
     return FlattenLayerParser.flatten_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weights)
 
 
+def _handle_identity(ctx: NodeContext) -> LayerParser:
+    return IdentityLayerParser.identity_layer_from_onnx(ctx.node, ctx.tensor_shapes)
+
+
 def _handle_activation(ctx: NodeContext) -> LayerParser:
     return ActivationLayerParser.activation_layer_from_onnx(ctx.node, ctx.tensor_shapes)
 
@@ -67,6 +72,7 @@ OP_HANDLERS = {
     "MaxPool": _handle_maxpool,
     "Flatten": _handle_flatten_reshape,
     "Reshape": _handle_flatten_reshape,
+    "Identity": _handle_identity,
     "Relu": _handle_activation,
     "Sigmoid": _handle_activation,
     "Tanh": _handle_activation,
