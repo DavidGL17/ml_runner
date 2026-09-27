@@ -5,6 +5,7 @@ mod dense;
 mod flatten;
 mod gather;
 mod layers;
+mod maxpool;
 mod rnn;
 mod shape;
 mod transpose;

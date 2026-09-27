@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 INPUT_DIMS = 800
@@ -41,3 +42,58 @@ class LongLinearModel(nn.Module):
 
     def get_input_dims(self) -> int:
         return INPUT_DIMS
+
+
+class LeNet300100(nn.Module):
+    """Classic fully-connected baseline: three Linear layers over a
+    flattened 28x28 input (784 -> 300 -> 100 -> 10). This is the dense-only
+    reference architecture the original LeNet-5 paper benchmarks its
+    convolutional design against."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(28 * 28, 300),
+            nn.ReLU(),
+            nn.Linear(300, 100),
+            nn.ReLU(),
+            nn.Linear(100, 10),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+    def get_input_dims(self) -> int:
+        return 28 * 28
+
+
+class LeNet5(nn.Module):
+    """Classic convolutional architecture: two Conv2d+MaxPool2d stages over
+    a 32x32 single-channel input, feeding into three Linear layers down to
+    10 classes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 6, kernel_size=5),  # 32x32 -> 28x28
+            nn.ReLU(),
+            nn.MaxPool2d(2),  # 28x28 -> 14x14
+            nn.Conv2d(6, 16, kernel_size=5),  # 14x14 -> 10x10
+            nn.ReLU(),
+            nn.MaxPool2d(2),  # 10x10 -> 5x5
+        )
+        self.classifier = nn.Sequential(
+            nn.Linear(16 * 5 * 5, 120),
+            nn.ReLU(),
+            nn.Linear(120, 84),
+            nn.ReLU(),
+            nn.Linear(84, 10),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.features(x)
+        x = torch.flatten(x, 1)
+        return self.classifier(x)
+
+    def get_input_dims(self) -> tuple[int, int, int]:
+        return (1, 32, 32)

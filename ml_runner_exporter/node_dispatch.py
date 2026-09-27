@@ -4,6 +4,7 @@ from ml_runner_exporter.layers.activation import ActivationLayerParser
 from ml_runner_exporter.layers.conv import Conv2DLayerParser
 from ml_runner_exporter.layers.flatten import FlattenLayerParser
 from ml_runner_exporter.layers.linear import LinearLayerParser
+from ml_runner_exporter.layers.maxpool import MaxPool2DLayerParser
 from ml_runner_exporter.layers.onnx.add import AddLayerParser
 from ml_runner_exporter.layers.onnx.gather import GatherLayerParser
 from ml_runner_exporter.layers.onnx.shape import ShapeLayerParser
@@ -36,6 +37,10 @@ def _handle_conv(ctx: NodeContext) -> LayerParser:
     return Conv2DLayerParser.conv2d_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weight_matrix, ctx.bias_vector)
 
 
+def _handle_maxpool(ctx: NodeContext) -> LayerParser:
+    return MaxPool2DLayerParser.maxpool_layer_from_onnx(ctx.node, ctx.tensor_shapes)
+
+
 def _handle_flatten_reshape(ctx: NodeContext) -> LayerParser:
     return FlattenLayerParser.flatten_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weights)
 
@@ -59,6 +64,7 @@ OP_HANDLERS = {
     "Gather": _handle_gather,
     "Gemm": _handle_gemm,
     "Conv": _handle_conv,
+    "MaxPool": _handle_maxpool,
     "Flatten": _handle_flatten_reshape,
     "Reshape": _handle_flatten_reshape,
     "Relu": _handle_activation,

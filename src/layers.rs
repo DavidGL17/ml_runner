@@ -4,6 +4,7 @@ use crate::conv::Conv2DLayer;
 use crate::dense::DenseLayer;
 use crate::flatten::FlattenLayer;
 use crate::gather::GatherLayer;
+use crate::maxpool::MaxPool2DLayer;
 use crate::rnn::{GRULayer, RNNLayer};
 use crate::shape::ShapeLayer;
 use crate::tensor::{Tensor, TensorShape};
@@ -60,6 +61,7 @@ define_layers! {
     Activation(ActivationLayer) => "activation",
     Conv2D(Conv2DLayer) => "conv2d",
     Flatten(FlattenLayer) => "flatten",
+    MaxPool(MaxPool2DLayer) => "maxpool",
     Rnn(RNNLayer) => "rnn",
     Gru(GRULayer) => "gru",
     Add(AddLayer) => "add",

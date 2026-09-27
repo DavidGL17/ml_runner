@@ -1,6 +1,6 @@
 """
-Benchmark HugeLinearModel and LongLinearModel in PyTorch (locally) and in the
-Rust runner (via `cargo run`, across the `default`, `simd`, and `blas`
+Benchmark LeNet300100 (dense) and LeNet5 (conv) in PyTorch (locally) and in
+the Rust runner (via `cargo run`, across the `default`, `simd`, and `blas`
 features), then print a single combined Markdown comparison table.
 
 Optionally, the same PyTorch + Rust benchmarks can also be run on one or more
@@ -115,7 +115,7 @@ import torch.onnx as torch_onnx
 from torch import nn
 
 from ml_runner_exporter import export_onnx
-from python_fixtures.benchmark_fixtures import HugeLinearModel, LongLinearModel
+from python_fixtures.benchmark_fixtures import LeNet5, LeNet300100
 
 RUST_FEATURES = ["default", "simd", "blas"]
 
@@ -155,10 +155,36 @@ def backend_name() -> str:
     return f"PyTorch {torch.__version__} (CPU, {torch.get_num_threads()} threads)"
 
 
-def benchmark_model_local(model: nn.Module, input_dim: int, iterations: int, seed: int, name: str) -> dict:
+def resolve_batched_shape(input_shape: Any, batch: int = 1) -> tuple[int, ...]:
+    """Resolve a model's `get_input_dims()` return value to a full batched
+    tensor shape, using one consistent convention everywhere a random input
+    is built for a model (local benchmarking, remote benchmarking - which
+    just re-runs this same code on the device - and ONNX export):
+
+      - a 3-tuple (C, H, W) is image-shaped -> (batch, C, H, W)
+      - a 2-tuple (seq_len, feature_size) is sequence data -> (seq_len, batch, feature_size)
+      - anything else (a bare int) is a flat dense feature vector -> (batch, input_shape)
+
+    Previously only export_and_run_model() had this branching; the local
+    PyTorch benchmark hardcoded a flat (1, input_dim) shape regardless of
+    what get_input_dims() returned, which silently only worked for
+    dense-only models. Centralizing it here means adding a conv or
+    sequence model only requires implementing get_input_dims() correctly -
+    every caller resolves it the same way.
+    """
+    if isinstance(input_shape, tuple) and len(input_shape) == 3:
+        return (batch, *input_shape)
+    if isinstance(input_shape, tuple) and len(input_shape) == 2:
+        seq_len, feature_size = input_shape
+        return (seq_len, batch, feature_size)
+    return (batch, input_shape)
+
+
+def benchmark_model_local(model: nn.Module, input_shape: Any, iterations: int, seed: int, name: str) -> dict:
     """Run the PyTorch forward-pass benchmark and return one result row."""
     warmup = min(10, max(iterations - 1, 0))
     gen = torch.Generator(device="cpu").manual_seed(seed)
+    batched_shape = resolve_batched_shape(input_shape)
 
     model.eval()
     samples_ns: list[float] = []
@@ -169,7 +195,7 @@ def benchmark_model_local(model: nn.Module, input_dim: int, iterations: int, see
         for i in range(iterations):
             # Input generation happens outside the timed region, matching
             # the Rust benchmark (random_tensor() is called before Instant::now()).
-            x = torch.rand((1, input_dim), generator=gen) * 2.0 - 1.0
+            x = torch.rand(batched_shape, generator=gen) * 2.0 - 1.0
 
             start = time.perf_counter_ns()
             try:
@@ -189,7 +215,7 @@ def benchmark_model_local(model: nn.Module, input_dim: int, iterations: int, see
     row = {
         "runner": "python",
         "backend": backend_name(),
-        "input_shape": [1, input_dim],
+        "input_shape": list(batched_shape),
         "output_shape": output_shape,
         "warmup": warmup,
         "errors": errors,
@@ -207,13 +233,7 @@ def benchmark_model_local(model: nn.Module, input_dim: int, iterations: int, see
 def export_and_run_model(model: nn.Module, input_shape: Any, onnx_path: Path, export_path: Path) -> Path:
     """Export a PyTorch model to ONNX, then convert it to the Rust runner's
     JSON model format at `export_path`. Returns `export_path`."""
-    if isinstance(input_shape, tuple) and len(input_shape) == 3:
-        dummy_input_data = torch.randn(1, *input_shape)
-    elif isinstance(input_shape, tuple) and len(input_shape) == 2:
-        seq_len, feature_size = input_shape
-        dummy_input_data = torch.randn(seq_len, 1, feature_size)
-    else:
-        dummy_input_data = torch.randn(1, input_shape)
+    dummy_input_data = torch.randn(resolve_batched_shape(input_shape))
 
     model.eval()
     torch_onnx.export(
@@ -426,7 +446,7 @@ def load_config(path: str) -> tuple[dict, list[RemoteDevice], Path | None]:
 
     # post processing
     resolved = {
-        "iterations": config.get("iterations", 200),
+        "iterations": config.get("iterations", 1000),
         "seed": config.get("seed") if config.get("seed") is not None else int(time.time()),
         "rust_dir": Path(config.get("rust_dir", ".")),
         "rust_features": config.get("rust_features", RUST_FEATURES),
@@ -788,7 +808,7 @@ def print_results(result: dict) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Benchmark HugeLinearModel/LongLinearModel in PyTorch and in the Rust runner "
+        description="Benchmark LeNet300100/LeNet5 in PyTorch and in the Rust runner "
         "(default/simd/blas), locally and optionally on remote SSH devices, and print one "
         "combined comparison table.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -862,21 +882,26 @@ def main() -> None:
         print()
 
     models = [
-        ("HugeLinearModel", HugeLinearModel()),  # type: ignore[no-untyped-call]
-        ("LongLinearModel", LongLinearModel([random.randint(100, 1000) for _ in range(30)])),  # noqa : S311
+        # Classic dense-only baseline from LeCun et al. 1998: three Linear
+        # layers over a flattened 28x28 input (784 -> 300 -> 100 -> 10).
+        ("LeNet300100", LeNet300100()),  # type: ignore[no-untyped-call]
+        # Classic conv architecture from the same paper: two Conv2d+MaxPool2d
+        # stages over a 32x32 single-channel input, feeding into three Linear
+        # layers.
+        ("LeNet5", LeNet5()),  # type: ignore[no-untyped-call]
     ]
 
     results = []
     output_to_print = []
 
     for idx, (name, model) in enumerate(models):
-        input_dim = model.get_input_dims()  # type: ignore[operator]
+        input_shape = model.get_input_dims()  # type: ignore[operator]
         seed = settings["seed"] + idx
         rows = []
 
         # 1. Local PyTorch run.
         print(f"Running local PyTorch benchmark: {name}...")
-        local_row = benchmark_model_local(model, input_dim=input_dim, iterations=settings["iterations"], seed=seed, name=name)
+        local_row = benchmark_model_local(model, input_shape=input_shape, iterations=settings["iterations"], seed=seed, name=name)
         local_row["model"] = name
         rows.append(local_row)
 
@@ -888,7 +913,7 @@ def main() -> None:
             onnx_path = settings["work_dir"] / f"{name}.onnx"
             export_path = settings["work_dir"] / f"{name}.json"
             print(f"Exporting {name} -> {export_path}...")
-            export_and_run_model(model, input_dim, onnx_path=onnx_path, export_path=export_path)
+            export_and_run_model(model, input_shape, onnx_path=onnx_path, export_path=export_path)
 
         # 3. Local Rust runner, once per feature set.
         if not settings["skip_rust"]:

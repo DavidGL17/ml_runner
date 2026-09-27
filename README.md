@@ -118,30 +118,30 @@ To run the tests, you can use `cargo test --all-features` to run all tests
 
 Results obtained by running `poetry run python benchmark.py`
 
-## Results for model : HugeLinearModel
-|   Runner   |                Backend                | Runs  |    Min    |    Max     |   Mean    |  Median   |   StdDev   | Errors |
-| :--------: | :-----------------------------------: | :---: | :-------: | :--------: | :-------: | :-------: | :--------: | :----: |
-|   python   | PyTorch 2.13.0+cu130 (CPU, 6 threads) |  490  | 2.360 ms  |  3.405 ms  | 2.704 ms  | 2.663 ms  | 178.340 µs |   0    |
-|    rust    |       ndarray (matrixmultiply)        |  490  | 4.653 ms  | 12.572 ms  | 6.186 ms  | 6.011 ms  |  1.046 ms  |   0    |
-|    rust    |              simd (wide)              |  490  | 4.191 ms  | 17.308 ms  | 5.581 ms  | 5.076 ms  |  1.502 ms  |   0    |
-|    rust    |            ndarray (BLAS)             |  490  | 2.407 ms  | 121.661 ms | 29.574 ms | 17.558 ms | 25.830 ms  |   0    |
-| python@pi4 | PyTorch 2.13.0+cu130 (CPU, 4 threads) |  490  | 59.463 ms | 127.800 ms | 68.915 ms | 68.743 ms |  7.792 ms  |   0    |
-|  rust@pi4  |       ndarray (matrixmultiply)        |  490  | 16.096 ms | 25.735 ms  | 16.743 ms | 16.449 ms |  1.033 ms  |   0    |
-|  rust@pi4  |              simd (wide)              |  490  | 16.256 ms | 22.659 ms  | 16.582 ms | 16.422 ms | 595.504 µs |   0    |
-|  rust@pi4  |            ndarray (BLAS)             |  490  | 17.367 ms | 45.690 ms  | 18.031 ms | 17.723 ms |  1.954 ms  |   0    |
+## Results for model : LeNet300100
+|   Runner   |                Backend                | Runs  |    Min     |    Max     |    Mean    |   Median   |   StdDev   | Errors |
+| :--------: | :-----------------------------------: | :---: | :--------: | :--------: | :--------: | :--------: | :--------: | :----: |
+|   python   | PyTorch 2.13.0+cu130 (CPU, 6 threads) |  490  | 70.100 µs  | 375.200 µs | 95.331 µs  | 97.500 µs  | 26.817 µs  |   0    |
+|    rust    |       ndarray (matrixmultiply)        |  490  | 48.000 µs  | 131.300 µs | 51.847 µs  | 48.300 µs  | 10.784 µs  |   0    |
+|    rust    |              simd (wide)              |  490  | 36.800 µs  | 89.500 µs  | 39.707 µs  | 37.900 µs  |  6.905 µs  |   0    |
+|    rust    |            ndarray (BLAS)             |  490  | 13.600 µs  | 899.501 µs | 18.540 µs  | 14.000 µs  | 43.353 µs  |   0    |
+| python@pi4 | PyTorch 2.13.0+cu130 (CPU, 4 threads) |  490  |  2.622 ms  | 11.906 ms  |  2.921 ms  |  2.746 ms  | 859.167 µs |   0    |
+|  rust@pi4  |       ndarray (matrixmultiply)        |  490  | 186.703 µs |  1.060 ms  | 201.565 µs | 191.934 µs | 45.391 µs  |   0    |
+|  rust@pi4  |              simd (wide)              |  490  | 211.091 µs | 438.498 µs | 224.922 µs | 217.036 µs | 27.027 µs  |   0    |
+|  rust@pi4  |            ndarray (BLAS)             |  490  | 138.055 µs | 366.184 µs | 158.050 µs | 154.120 µs | 24.055 µs  |   0    |
 
 
-## Results for model : LongLinearModel
-|   Runner   |                Backend                | Runs  |    Min    |    Max     |   Mean    |  Median   |   StdDev   | Errors |
-| :--------: | :-----------------------------------: | :---: | :-------: | :--------: | :-------: | :-------: | :--------: | :----: |
-|   python   | PyTorch 2.13.0+cu130 (CPU, 6 threads) |  490  | 1.906 ms  |  9.610 ms  | 3.367 ms  | 2.852 ms  |  1.385 ms  |   0    |
-|    rust    |       ndarray (matrixmultiply)        |  490  | 2.981 ms  | 10.521 ms  | 4.174 ms  | 3.949 ms  | 944.390 µs |   0    |
-|    rust    |              simd (wide)              |  490  | 2.636 ms  |  7.183 ms  | 3.851 ms  | 3.623 ms  | 888.879 µs |   0    |
-|    rust    |            ndarray (BLAS)             |  490  | 1.469 ms  | 293.764 ms | 30.265 ms | 9.656 ms  | 41.311 ms  |   0    |
-| python@pi4 | PyTorch 2.13.0+cu130 (CPU, 4 threads) |  490  | 61.014 ms | 128.781 ms | 64.296 ms | 62.297 ms |  7.781 ms  |   0    |
-|  rust@pi4  |       ndarray (matrixmultiply)        |  490  | 9.697 ms  | 16.732 ms  | 10.136 ms | 9.912 ms  | 754.711 µs |   0    |
-|  rust@pi4  |              simd (wide)              |  490  | 9.695 ms  | 17.008 ms  | 9.893 ms  | 9.812 ms  | 434.878 µs |   0    |
-|  rust@pi4  |            ndarray (BLAS)             |  490  | 10.736 ms | 27.790 ms  | 11.364 ms | 11.015 ms |  1.517 ms  |   0    |
+## Results for model : LeNet5
+|   Runner   |                Backend                | Runs  |    Min     |    Max    |    Mean    |   Median   |   StdDev   | Errors |
+| :--------: | :-----------------------------------: | :---: | :--------: | :-------: | :--------: | :--------: | :--------: | :----: |
+|   python   | PyTorch 2.13.0+cu130 (CPU, 6 threads) |  490  | 625.891 µs | 1.695 ms  | 792.485 µs | 788.888 µs | 115.077 µs |   0    |
+|    rust    |       ndarray (matrixmultiply)        |  490  |  1.065 ms  | 2.297 ms  |  1.151 ms  |  1.078 ms  | 256.801 µs |   0    |
+|    rust    |              simd (wide)              |  490  |  1.041 ms  | 2.417 ms  |  1.124 ms  |  1.055 ms  | 231.703 µs |   0    |
+|    rust    |            ndarray (BLAS)             |  490  |  1.871 ms  | 16.903 ms |  5.412 ms  |  4.983 ms  |  2.097 ms  |   0    |
+| python@pi4 | PyTorch 2.13.0+cu130 (CPU, 4 threads) |  490  |  3.425 ms  | 26.702 ms |  4.175 ms  |  3.598 ms  |  2.371 ms  |   0    |
+|  rust@pi4  |       ndarray (matrixmultiply)        |  490  |  3.871 ms  | 6.387 ms  |  3.994 ms  |  3.937 ms  | 239.704 µs |   0    |
+|  rust@pi4  |              simd (wide)              |  490  |  3.874 ms  | 6.172 ms  |  3.967 ms  |  3.931 ms  | 139.602 µs |   0    |
+|  rust@pi4  |            ndarray (BLAS)             |  490  |  3.854 ms  | 12.139 ms |  4.024 ms  |  4.004 ms  | 463.948 µs |   0    |
 
 ## Roadmap
 
