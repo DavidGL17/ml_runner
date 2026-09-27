@@ -16,17 +16,36 @@ impl AddLayer {
         self.shape.clone()
     }
 
-    pub fn forward(&self, input: &Tensor) -> Tensor {
+    pub fn forward(&self, inputs: &[&Tensor]) -> Tensor {
+        assert!(
+            !inputs.is_empty(),
+            "AddLayer requires at least one tensor input"
+        );
+
+        let primary = inputs[0];
         assert_eq!(
-            input.shape(),
+            primary.shape(),
             self.input_shape(),
             "Shape mismatch in AddLayer: expected {:?}, got {:?}",
             self.input_shape(),
-            input.shape()
+            primary.shape()
         );
 
         let total_size = self.shape.total_size();
-        let mut data = input.data.clone();
+        let mut data = primary.data.clone();
+
+        for extra in &inputs[1..] {
+            assert_eq!(
+                extra.shape(),
+                self.input_shape(),
+                "Shape mismatch in AddLayer: expected {:?}, got {:?}",
+                self.input_shape(),
+                extra.shape()
+            );
+            for (d, e) in data.iter_mut().zip(extra.data.iter()) {
+                *d += e;
+            }
+        }
 
         for constant in &self.constants {
             if constant.len() == total_size {
@@ -70,7 +89,7 @@ mod tests {
             constants: vec![vec![10.0, 20.0, 30.0]],
         };
         let input = Tensor::new(vec![1.0, 2.0, 3.0], TensorShape::Flat(3));
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
         assert_eq!(output.to_vec(), vec![11.0, 22.0, 33.0]);
     }
 
@@ -81,7 +100,7 @@ mod tests {
             constants: vec![vec![5.0]],
         };
         let input = Tensor::new(vec![1.0, 2.0, 3.0], TensorShape::Flat(3));
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
         assert_eq!(output.to_vec(), vec![6.0, 7.0, 8.0]);
     }
 
@@ -92,7 +111,7 @@ mod tests {
             constants: vec![vec![1.0, 1.0], vec![100.0]],
         };
         let input = Tensor::new(vec![0.0, 0.0], TensorShape::Flat(2));
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
         // input + [1,1] + broadcast(100) = [101, 101]
         assert_eq!(output.to_vec(), vec![101.0, 101.0]);
     }
@@ -104,7 +123,7 @@ mod tests {
             constants: vec![],
         };
         let input = Tensor::new(vec![4.0, 5.0], TensorShape::Flat(2));
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
         assert_eq!(output.to_vec(), vec![4.0, 5.0]);
     }
 
@@ -115,8 +134,38 @@ mod tests {
             constants: vec![vec![1.0, 2.0, 3.0, 4.0]],
         };
         let input = Tensor::new(vec![10.0, 20.0, 30.0, 40.0], layer.shape.clone());
-        let output = layer.forward(&input);
+        let output = layer.forward(&[&input]);
         assert_eq!(output.to_vec(), vec![11.0, 22.0, 33.0, 44.0]);
+    }
+
+    /// A residual/skip connection: two genuine computed tensors, no
+    /// constants at all - e.g. `x + shortcut(x)` in a ResNet block.
+    #[test]
+    fn test_forward_two_tensor_inputs_residual_add() {
+        let layer = AddLayer {
+            shape: TensorShape::Flat(3),
+            constants: vec![],
+        };
+        let main_branch = Tensor::new(vec![1.0, 2.0, 3.0], TensorShape::Flat(3));
+        let shortcut = Tensor::new(vec![10.0, 20.0, 30.0], TensorShape::Flat(3));
+        let output = layer.forward(&[&main_branch, &shortcut]);
+        assert_eq!(output.to_vec(), vec![11.0, 22.0, 33.0]);
+    }
+
+    /// Two real tensor inputs *and* a constant - both code paths in the
+    /// same forward call, to make sure they compose rather than being
+    /// mutually exclusive.
+    #[test]
+    fn test_forward_two_tensor_inputs_plus_constant() {
+        let layer = AddLayer {
+            shape: TensorShape::Flat(2),
+            constants: vec![vec![100.0]],
+        };
+        let a = Tensor::new(vec![1.0, 2.0], TensorShape::Flat(2));
+        let b = Tensor::new(vec![10.0, 20.0], TensorShape::Flat(2));
+        let output = layer.forward(&[&a, &b]);
+        // (a + b) + broadcast(100) = [111, 122]
+        assert_eq!(output.to_vec(), vec![111.0, 122.0]);
     }
 
     #[test]
@@ -127,7 +176,19 @@ mod tests {
             constants: vec![vec![1.0, 2.0, 3.0]],
         };
         let wrong_input = Tensor::new(vec![0.0, 0.0], TensorShape::Flat(2));
-        layer.forward(&wrong_input);
+        layer.forward(&[&wrong_input]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Shape mismatch")]
+    fn test_forward_rejects_mismatched_second_tensor_shape() {
+        let layer = AddLayer {
+            shape: TensorShape::Flat(3),
+            constants: vec![],
+        };
+        let a = Tensor::new(vec![1.0, 2.0, 3.0], TensorShape::Flat(3));
+        let wrong_b = Tensor::new(vec![1.0, 2.0], TensorShape::Flat(2));
+        layer.forward(&[&a, &wrong_b]);
     }
 
     #[test]
@@ -138,6 +199,6 @@ mod tests {
             constants: vec![vec![1.0, 2.0]], // neither 3 nor 1
         };
         let input = Tensor::new(vec![0.0, 0.0, 0.0], TensorShape::Flat(3));
-        layer.forward(&input);
+        layer.forward(&[&input]);
     }
 }

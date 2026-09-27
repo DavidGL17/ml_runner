@@ -4,6 +4,7 @@ mod conv;
 mod dense;
 mod flatten;
 mod gather;
+mod identity;
 mod layers;
 mod maxpool;
 mod rnn;

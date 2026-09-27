@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::layers::{IoSpec, Node};
+use crate::layers::{IoSpec, Layer, Node};
 use crate::tensor::{Tensor, TensorShape};
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +9,10 @@ pub struct Model {
     pub inputs: Vec<IoSpec>,  // multiple model inputs now allowed
     pub outputs: Vec<IoSpec>, // multiple model outputs now allowed
     pub nodes: Vec<Node>,
+}
+
+fn allows_multiple_inputs(op: &Layer) -> bool {
+    matches!(op, Layer::Add(_))
 }
 
 impl Model {
@@ -23,11 +27,6 @@ impl Model {
     /// a typo'd tensor name, a conv layer feeding straight into a dense
     /// layer without a Flatten) before any forward pass runs.
     ///
-    /// Every `Layer` variant is still single-input/single-output for now
-    /// (see `layers.rs`), so a node with any other arity is rejected here
-    /// rather than silently truncated - this is the one thing that has to
-    /// change when multi-input layers (e.g. a merge/add-two-tensors op)
-    /// are added later.
     pub fn validate_shapes(&self) -> Result<(), String> {
         let mut shapes: HashMap<String, TensorShape> = self
             .inputs
@@ -36,9 +35,11 @@ impl Model {
             .collect();
 
         for node in &self.nodes {
-            if node.inputs.len() != 1 || node.outputs.len() != 1 {
+            let multi_input_ok = allows_multiple_inputs(&node.op) && node.inputs.len() > 1;
+
+            if node.outputs.len() != 1 || node.inputs.is_empty() || (!multi_input_ok && node.inputs.len() != 1) {
                 return Err(format!(
-                    "node '{}': multi-input/output layers aren't supported yet \
+                    "node '{}': unsupported input/output arity for this layer type \
                      (got {} inputs, {} outputs)",
                     node.id,
                     node.inputs.len(),
@@ -46,19 +47,20 @@ impl Model {
                 ));
             }
 
-            let in_name = &node.inputs[0];
-            let in_shape = shapes.get(in_name).ok_or_else(|| {
-                format!("node '{}' reads undefined tensor '{}'", node.id, in_name)
-            })?;
+            for in_name in &node.inputs {
+                let in_shape = shapes.get(in_name).ok_or_else(|| {
+                    format!("node '{}' reads undefined tensor '{}'", node.id, in_name)
+                })?;
 
-            if *in_shape != node.op.input_shape() {
-                return Err(format!(
-                    "node '{}': tensor '{}' has shape {:?}, layer expects {:?}",
-                    node.id,
-                    in_name,
-                    in_shape,
-                    node.op.input_shape()
-                ));
+                if *in_shape != node.op.input_shape() {
+                    return Err(format!(
+                        "node '{}': tensor '{}' has shape {:?}, layer expects {:?}",
+                        node.id,
+                        in_name,
+                        in_shape,
+                        node.op.input_shape()
+                    ));
+                }
             }
 
             shapes.insert(node.outputs[0].clone(), node.op.output_shape());
@@ -100,9 +102,11 @@ impl Model {
         let mut env: HashMap<String, Tensor> = inputs;
 
         for node in &self.nodes {
-            if node.inputs.len() != 1 || node.outputs.len() != 1 {
+            let multi_input_ok = allows_multiple_inputs(&node.op) && node.inputs.len() > 1;
+
+            if node.outputs.len() != 1 || node.inputs.is_empty() || (!multi_input_ok && node.inputs.len() != 1) {
                 return Err(format!(
-                    "node '{}': multi-input/output layers aren't supported yet \
+                    "node '{}': unsupported input/output arity for this layer type \
                      (got {} inputs, {} outputs)",
                     node.id,
                     node.inputs.len(),
@@ -110,13 +114,20 @@ impl Model {
                 ));
             }
 
-            let in_tensor = env.get(&node.inputs[0]).ok_or_else(|| {
-                format!(
-                    "node '{}' needs tensor '{}', not yet computed",
-                    node.id, node.inputs[0]
-                )
-            })?;
-            let out = node.op.forward(&[in_tensor]);
+            let in_tensors: Vec<&Tensor> = node
+                .inputs
+                .iter()
+                .map(|name| {
+                    env.get(name).ok_or_else(|| {
+                        format!(
+                            "node '{}' needs tensor '{}', not yet computed",
+                            node.id, name
+                        )
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+
+            let out = node.op.forward(&in_tensors);
             env.insert(node.outputs[0].clone(), out);
         }
 
@@ -591,12 +602,11 @@ mod tests {
         assert!(err.contains("missing_output"));
     }
 
-    /// Nodes with more/less than one input or output aren't supported by
-    /// any `Layer` variant yet - this is the seam multi-input layers will
-    /// widen later. Until then, such a node should fail loudly at
+    /// A node with more than one input still isn't supported by any
+    /// `Layer` variant except `Add` - `dense` here should fail loudly at
     /// validation time rather than silently dropping extra tensor names.
     #[test]
-    fn test_validate_shapes_rejects_multi_input_node() {
+    fn test_validate_shapes_rejects_multi_input_node_for_non_add_layer() {
         let json = r#"
         {
             "inputs": [
@@ -620,6 +630,80 @@ mod tests {
         "#;
         let model = Model::from_json(json).unwrap();
         let err = model.validate_shapes().unwrap_err();
-        assert!(err.contains("multi-input"));
+        assert!(err.contains("unsupported input/output arity"));
+    }
+
+    /// The motivating case: a residual/skip connection, where an `Add`
+    /// node reads two real upstream tensors of the same shape rather than
+    /// one tensor plus baked-in constants.
+    #[test]
+    fn test_validate_shapes_and_forward_accept_two_input_add() {
+        let json = r#"
+        {
+            "inputs": [{ "name": "input", "shape": { "Flat": 2 } }],
+            "outputs": [{ "name": "output", "shape": { "Flat": 2 } }],
+            "nodes": [
+                {
+                    "id": "branch",
+                    "inputs": ["input"],
+                    "outputs": ["branch_out"],
+                    "type": "dense",
+                    "input_size": 2,
+                    "output_size": 2,
+                    "weights": [1.0, 0.0, 0.0, 1.0],
+                    "bias": [0.0, 0.0]
+                },
+                {
+                    "id": "residual_add",
+                    "inputs": ["input", "branch_out"],
+                    "outputs": ["output"],
+                    "type": "add",
+                    "shape": { "Flat": 2 },
+                    "constants": []
+                }
+            ]
+        }
+        "#;
+        let model = Model::from_json(json).unwrap();
+        assert!(model.validate_shapes().is_ok());
+
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "input".to_string(),
+            Tensor::new(vec![3.0, 4.0], TensorShape::Flat(2)),
+        );
+
+        let outputs = model.forward(inputs).unwrap();
+        // branch_out = identity(input) = [3, 4]; output = input + branch_out = [6, 8]
+        assert_eq!(outputs["output"].to_vec(), vec![6.0, 8.0]);
+    }
+
+    /// A 3+-input `Add` node is also accepted, even though real ONNX
+    /// graphs only ever emit binary `Add`s - the arity check is `> 1`,
+    /// not `== 2`, so this documents it isn't artificially capped there.
+    #[test]
+    fn test_validate_shapes_accepts_three_input_add() {
+        let json = r#"
+        {
+            "inputs": [
+                { "name": "a", "shape": { "Flat": 2 } },
+                { "name": "b", "shape": { "Flat": 2 } },
+                { "name": "c", "shape": { "Flat": 2 } }
+            ],
+            "outputs": [{ "name": "output", "shape": { "Flat": 2 } }],
+            "nodes": [
+                {
+                    "id": "sum3",
+                    "inputs": ["a", "b", "c"],
+                    "outputs": ["output"],
+                    "type": "add",
+                    "shape": { "Flat": 2 },
+                    "constants": []
+                }
+            ]
+        }
+        "#;
+        let model = Model::from_json(json).unwrap();
+        assert!(model.validate_shapes().is_ok());
     }
 }

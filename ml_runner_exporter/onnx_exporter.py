@@ -105,17 +105,20 @@ def _build_node(node: NodeProto, layer: LayerParser, weights: dict, index: int) 
     """Wraps a parsed `LayerParser` with the graph-wiring fields (`id`,
     `inputs`, `outputs`) the Rust `Node` struct expects.
 
-    Every `Layer` variant on the Rust side is still single-input/single-
-    output for now, so this raises rather than silently dropping extra
-    tensor names if an ONNX node turns out to have more than one real
-    data input/output - the same restriction `Model::validate_shapes`
-    enforces at load time.
+    Every `Layer` variant on the Rust side is single-input/single-output
+    except `add`, which can take more than one real tensor input - a
+    residual/skip connection (`x + shortcut(x)`) sums two computed
+    activations, not just one tensor plus baked-in constants. Anything
+    else with more than one real data input still raises, the same
+    restriction `Model::validate_shapes` enforces at load time.
     """
     data_inputs = _data_tensor_names(node, weights)
-    if len(data_inputs) != 1:
+    is_multi_input_add = layer.layer_type == "add" and len(data_inputs) > 1
+
+    if len(data_inputs) < 1 or (not is_multi_input_add and len(data_inputs) != 1):
         raise ValueError(
             f"Node '{node.name or index}' ({node.op_type}) has {len(data_inputs)} data "
-            "inputs; only single-input layers are supported by the Rust runtime so far"
+            "inputs; only single-input layers (or a multi-input Add) are supported by the Rust runtime so far"
         )
 
     data_outputs = _data_output_names(node)
