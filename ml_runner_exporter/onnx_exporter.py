@@ -8,6 +8,8 @@ from ml_runner_exporter.model import export_model
 from ml_runner_exporter.node_dispatch import OP_HANDLERS
 from ml_runner_exporter.utils import dims_to_tensor_shape
 
+_RECURRENT_OPS = ("RNN", "GRU", "LSTM")
+
 
 def _compute_io_specs(graph: GraphProto) -> tuple[list[dict], list[dict]]:
     """Builds the model's IoSpec lists ({"name": ..., "shape": ...}),
@@ -15,13 +17,22 @@ def _compute_io_specs(graph: GraphProto) -> tuple[list[dict], list[dict]]:
     exactly the names `_build_node` uses for node wiring too, so a node
     consuming a graph input or producing a graph output lines up
     automatically without any extra bookkeeping.
+
+    Whether a tensor uses the recurrent layout is decided per tensor, not
+    per graph: a graph input is (seq_len, batch, features) only if an
+    RNN/GRU/LSTM node reads it directly, and a graph output is a recurrent
+    Y / Y_h only if such a node produces it. Anything else (e.g. the
+    (batch, classes) output of a classifier head sitting after the LSTM)
+    just has its leading batch dimension dropped.
     """
-    is_recurrent = len(graph.node) > 0 and graph.node[0].op_type in ("RNN", "GRU")
+    recurrent_nodes = [n for n in graph.node if n.op_type in _RECURRENT_OPS]
+    recurrent_inputs = {n.input[0] for n in recurrent_nodes}
+    recurrent_outputs = {name for n in recurrent_nodes for name in n.output if name}
 
     inputs = []
     for inp in graph.input:
         shape = tuple(d.dim_value for d in inp.type.tensor_type.shape.dim)
-        if is_recurrent:
+        if inp.name in recurrent_inputs:
             seq_len, _batch, features = shape
             tensor_shape = dims_to_tensor_shape((seq_len, features))
         else:
@@ -31,7 +42,7 @@ def _compute_io_specs(graph: GraphProto) -> tuple[list[dict], list[dict]]:
     outputs = []
     for out in graph.output:
         shape = tuple(d.dim_value for d in out.type.tensor_type.shape.dim)
-        if is_recurrent:
+        if out.name in recurrent_outputs:
             if len(shape) == 4:
                 # Y: (seq_len, num_directions, batch, hidden) -> return_sequences=True
                 seq_len, _num_directions, _batch, hidden = shape
@@ -45,6 +56,35 @@ def _compute_io_specs(graph: GraphProto) -> tuple[list[dict], list[dict]]:
         outputs.append({"name": out.name, "shape": tensor_shape})
 
     return inputs, outputs
+
+
+def _prune_unused_outputs(graph: GraphProto, skip_node_names: set[str]) -> None:
+    """Blanks out (`""`) every output of a multi-output node that nothing
+    reads - no other emitted node consumes it and it isn't a graph output.
+
+    ONNX represents an omitted optional output as an empty-string
+    placeholder, but not every exporter does that: PyTorch's legacy
+    TorchScript exporter names all of an LSTM's `Y`, `Y_h` and `Y_c` even
+    when only one is used downstream. Normalizing them here means both the
+    layer parsers (which decide e.g. `return_sequences` from which of
+    `Y`/`Y_h` is present) and `_build_node`'s single-output check see only
+    the outputs that are actually wired up.
+    """
+
+    def is_skipped(i: int, node) -> bool:
+        return (node.name or f"node_{i}") in skip_node_names
+
+    used = {out.name for out in graph.output}
+    for i, node in enumerate(graph.node):
+        if not is_skipped(i, node):
+            used.update(name for name in node.input if name)
+
+    for i, node in enumerate(graph.node):
+        if is_skipped(i, node) or len(node.output) < 2:
+            continue
+        for j, name in enumerate(node.output):
+            if name and name not in used:
+                node.output[j] = ""
 
 
 def _resolve_constant_nodes(graph: GraphProto, weights: dict, tensor_shapes: dict) -> set[str]:
@@ -176,13 +216,107 @@ def _resolve_constant_unsqueezes(graph: GraphProto, weights: dict, tensor_shapes
     return skip_node_names
 
 
+def _resolve_constant_concats(graph: GraphProto, weights: dict, tensor_shapes: dict) -> set[str]:
+    """Same idea as the other constant-folding passes: if every real input
+    to a `Concat` node is already a known constant - e.g. assembling a
+    literal shape/config vector from several `Constant`-folded pieces, the
+    tail end of a `Shape -> Gather -> Unsqueeze -> Concat -> Reshape`
+    dynamic-shape chain when nothing in it actually turned out to be
+    dynamic - joining them is a compile-time operation, not real
+    forward-pass computation.
+
+    This folds such a node (via `np.concatenate`) into `weights`/
+    `tensor_shapes` under its output name and returns the node names to
+    drop from the emitted graph. A `Concat` with even one genuine
+    data-flow input (e.g. real channel-wise feature map concatenation) is
+    left alone for `ConcatLayerParser` to handle.
+    """
+    skip_node_names = set()
+    for i, node in enumerate(graph.node):
+        if node.op_type != "Concat":
+            continue
+        if not all(name in weights for name in node.input):
+            continue  # at least one genuine data-flow input - a real Concat
+
+        axis = next((attr.i for attr in node.attribute if attr.name == "axis"), None)
+        if axis is None:
+            raise ValueError(f"Concat node '{node.name}' is missing the required 'axis' attribute")
+
+        array = np.concatenate([weights[name] for name in node.input], axis=axis)
+
+        dst = node.output[0]
+        weights[dst] = array
+        tensor_shapes[dst] = array.shape
+        skip_node_names.add(node.name or f"node_{i}")
+
+    return skip_node_names
+
+
+def _resolve_constant_shapes(graph: GraphProto, weights: dict, tensor_shapes: dict) -> set[str]:
+    """`Shape` of a tensor whose dims are statically known is a compile-time constant."""
+    skip_node_names = set()
+    for i, node in enumerate(graph.node):
+        if node.op_type != "Shape":
+            continue
+        dims = tensor_shapes.get(node.input[0])
+        if dims is None or any(d <= 0 for d in dims):
+            continue  # unknown/dynamic dim - leave for ShapeLayerParser
+        attrs = {a.name: a for a in node.attribute}
+        start = attrs["start"].i if "start" in attrs else 0
+        end = attrs["end"].i if "end" in attrs else len(dims)
+
+        array = np.array(dims[start:end], dtype=np.int64)
+        dst = node.output[0]
+        weights[dst] = array
+        tensor_shapes[dst] = array.shape
+        skip_node_names.add(node.name or f"node_{i}")
+    return skip_node_names
+
+
+def _resolve_constant_gathers(graph: GraphProto, weights: dict, tensor_shapes: dict) -> set[str]:
+    skip_node_names = set()
+    for i, node in enumerate(graph.node):
+        if node.op_type != "Gather":
+            continue
+        data, indices = node.input[0], node.input[1]
+        if data not in weights or indices not in weights:
+            continue
+        axis = next((a.i for a in node.attribute if a.name == "axis"), 0)
+        array = np.take(weights[data], weights[indices].astype(np.int64), axis=axis)
+
+        dst = node.output[0]
+        weights[dst] = array
+        tensor_shapes[dst] = array.shape
+        skip_node_names.add(node.name or f"node_{i}")
+    return skip_node_names
+
+
+def _resolve_constant_expands(graph: GraphProto, weights: dict, tensor_shapes: dict) -> set[str]:
+    skip_node_names = set()
+    for i, node in enumerate(graph.node):
+        if node.op_type != "Expand":
+            continue
+        src, shape_name = node.input[0], node.input[1]
+        if src not in weights or shape_name not in weights:
+            continue
+        target = tuple(int(d) for d in weights[shape_name].flatten())
+        out_shape = np.broadcast_shapes(weights[src].shape, target)
+        array = np.broadcast_to(weights[src], out_shape).copy()
+
+        dst = node.output[0]
+        weights[dst] = array
+        tensor_shapes[dst] = array.shape
+        skip_node_names.add(node.name or f"node_{i}")
+    return skip_node_names
+
+
 def _data_tensor_names(node: NodeProto, weights: dict) -> list[str]:
     """The subset of `node.input` that are actual data-flow tensors (an
     upstream node's output, or a graph input) rather than a weight/bias
     initializer that's already been folded into the parsed `LayerParser`
     (e.g. Gemm's W/B, Conv's weight/bias, RNN/GRU's W/R/B).
     """
-    return [name for name in node.input if name not in weights]
+    return [name for name in node.input if name and name not in weights]
 
 
 def _data_output_names(node: NodeProto) -> list[str]:
@@ -200,19 +334,21 @@ def _build_node(node: NodeProto, layer: LayerParser, weights: dict, index: int) 
     `inputs`, `outputs`) the Rust `Node` struct expects.
 
     Every `Layer` variant on the Rust side is single-input/single-output
-    except `add`, which can take more than one real tensor input - a
-    residual/skip connection (`x + shortcut(x)`) sums two computed
-    activations, not just one tensor plus baked-in constants. Anything
-    else with more than one real data input still raises, the same
-    restriction `Model::validate_shapes` enforces at load time.
+    except `add` and `concat`, which can take more than one real tensor
+    input - a residual/skip connection (`x + shortcut(x)`) sums two
+    computed activations rather than one tensor plus baked-in constants,
+    and joining feature maps needs every operand at once. Anything else
+    with more than one real data input still raises, the same restriction
+    `Model::validate_shapes` enforces at load time.
     """
     data_inputs = _data_tensor_names(node, weights)
-    is_multi_input_add = layer.layer_type == "add" and len(data_inputs) > 1
+    allows_multiple_inputs = layer.layer_type in ("add", "concat")
+    is_multi_input_ok = allows_multiple_inputs and len(data_inputs) > 1
 
-    if len(data_inputs) < 1 or (not is_multi_input_add and len(data_inputs) != 1):
+    if len(data_inputs) < 1 or (not is_multi_input_ok and len(data_inputs) != 1):
         raise ValueError(
             f"Node '{node.name or index}' ({node.op_type}) has {len(data_inputs)} data "
-            "inputs; only single-input layers (or a multi-input Add) are supported by the Rust runtime so far"
+            "inputs; only single-input layers (or a multi-input Add/Concat) are supported by the Rust runtime so far"
         )
 
     data_outputs = _data_output_names(node)
@@ -267,13 +403,24 @@ def export_onnx(model_path: str) -> dict:
     weights = {init.name: numpy_helper.to_array(init) for init in graph.initializer}
     inputs, outputs = _compute_io_specs(graph)
 
-    # Order matters here: constants must be folded into `weights` first, so
-    # that a Constant -> Identity or Constant -> Unsqueeze chain (rewrapping
-    # a literal under another name/shape) is recognized regardless of where
-    # each node sits in the graph.
-    skip_node_names = _resolve_constant_nodes(graph, weights, tensor_shapes)
-    skip_node_names |= _resolve_constant_identities(graph, weights, tensor_shapes)
-    skip_node_names |= _resolve_constant_unsqueezes(graph, weights, tensor_shapes)
+    skip_node_names: set[str] = set()
+    passes = (
+        _resolve_constant_nodes,
+        _resolve_constant_identities,
+        _resolve_constant_shapes,
+        _resolve_constant_gathers,
+        _resolve_constant_unsqueezes,
+        _resolve_constant_concats,
+        _resolve_constant_expands,
+    )
+    while True:
+        before = len(skip_node_names)
+        for fold in passes:
+            skip_node_names |= fold(graph, weights, tensor_shapes)
+        if len(skip_node_names) == before:
+            break
+
+    _prune_unused_outputs(graph, skip_node_names)
 
     nodes = [
         _build_node(node, _parse_node(node, tensor_shapes, weights), weights, i)

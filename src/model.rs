@@ -11,8 +11,14 @@ pub struct Model {
     pub nodes: Vec<Node>,
 }
 
+/// Whether `node` is allowed to read more than one input tensor. `Add`
+/// and `Concat` are the exceptions to the single-input rule: a
+/// residual/skip connection (`x + shortcut(x)`) sums two real computed
+/// tensors rather than one tensor plus baked-in constants, and joining
+/// feature maps needs every operand at once - so a 2+-input node is valid
+/// for either, while every other variant still isn't.
 fn allows_multiple_inputs(op: &Layer) -> bool {
-    matches!(op, Layer::Add(_))
+    matches!(op, Layer::Add(_) | Layer::Concat(_))
 }
 
 impl Model {
@@ -27,6 +33,13 @@ impl Model {
     /// a typo'd tensor name, a conv layer feeding straight into a dense
     /// layer without a Flatten) before any forward pass runs.
     ///
+    /// Every `Layer` variant is single-input/single-output except `Add`
+    /// and `Concat` (see `allows_multiple_inputs`) - a node with any other
+    /// arity is rejected here rather than silently truncated. `Add`'s
+    /// operands all share one declared shape, so they're validated through
+    /// the generic per-input loop below like any single-input layer;
+    /// `Concat`'s operands generally differ, so it gets its own
+    /// per-position check instead.
     pub fn validate_shapes(&self) -> Result<(), String> {
         let mut shapes: HashMap<String, TensorShape> = self
             .inputs
@@ -47,19 +60,45 @@ impl Model {
                 ));
             }
 
-            for in_name in &node.inputs {
-                let in_shape = shapes.get(in_name).ok_or_else(|| {
-                    format!("node '{}' reads undefined tensor '{}'", node.id, in_name)
-                })?;
+            match &node.op {
+                Layer::Concat(concat) => {
+                    let expected = concat.input_shapes();
+                    if expected.len() != node.inputs.len() {
+                        return Err(format!(
+                            "node '{}': Concat declares {} input shape(s) but the graph wires {} input(s)",
+                            node.id,
+                            expected.len(),
+                            node.inputs.len()
+                        ));
+                    }
+                    for (in_name, exp_shape) in node.inputs.iter().zip(expected.iter()) {
+                        let in_shape = shapes.get(in_name).ok_or_else(|| {
+                            format!("node '{}' reads undefined tensor '{}'", node.id, in_name)
+                        })?;
+                        if in_shape != exp_shape {
+                            return Err(format!(
+                                "node '{}': tensor '{}' has shape {:?}, layer expects {:?}",
+                                node.id, in_name, in_shape, exp_shape
+                            ));
+                        }
+                    }
+                }
+                _ => {
+                    for in_name in &node.inputs {
+                        let in_shape = shapes.get(in_name).ok_or_else(|| {
+                            format!("node '{}' reads undefined tensor '{}'", node.id, in_name)
+                        })?;
 
-                if *in_shape != node.op.input_shape() {
-                    return Err(format!(
-                        "node '{}': tensor '{}' has shape {:?}, layer expects {:?}",
-                        node.id,
-                        in_name,
-                        in_shape,
-                        node.op.input_shape()
-                    ));
+                        if *in_shape != node.op.input_shape() {
+                            return Err(format!(
+                                "node '{}': tensor '{}' has shape {:?}, layer expects {:?}",
+                                node.id,
+                                in_name,
+                                in_shape,
+                                node.op.input_shape()
+                            ));
+                        }
+                    }
                 }
             }
 
@@ -705,5 +744,73 @@ mod tests {
         "#;
         let model = Model::from_json(json).unwrap();
         assert!(model.validate_shapes().is_ok());
+    }
+
+    /// The motivating case for `Concat`: operands with *different* shapes
+    /// (unlike `Add`, where every operand must match one declared shape).
+    #[test]
+    fn test_validate_shapes_and_forward_accept_concat_with_differently_shaped_inputs() {
+        let json = r#"
+        {
+            "inputs": [
+                { "name": "a", "shape": { "Flat": 2 } },
+                { "name": "b", "shape": { "Flat": 1 } }
+            ],
+            "outputs": [{ "name": "output", "shape": { "Flat": 3 } }],
+            "nodes": [
+                {
+                    "id": "join",
+                    "inputs": ["a", "b"],
+                    "outputs": ["output"],
+                    "type": "concat",
+                    "axis": 0,
+                    "input_shapes": [{ "Flat": 2 }, { "Flat": 1 }],
+                    "output_shape": { "Flat": 3 }
+                }
+            ]
+        }
+        "#;
+        let model = Model::from_json(json).unwrap();
+        assert!(model.validate_shapes().is_ok());
+
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "a".to_string(),
+            Tensor::new(vec![1.0, 2.0], TensorShape::Flat(2)),
+        );
+        inputs.insert("b".to_string(), Tensor::new(vec![3.0], TensorShape::Flat(1)));
+
+        let outputs = model.forward(inputs).unwrap();
+        assert_eq!(outputs["output"].to_vec(), vec![1.0, 2.0, 3.0]);
+    }
+
+    /// `Concat` validates each input position against its *own* declared
+    /// shape rather than one shared shape - a mismatch on just the second
+    /// operand should still be caught.
+    #[test]
+    fn test_validate_shapes_catches_concat_operand_shape_mismatch() {
+        let json = r#"
+        {
+            "inputs": [
+                { "name": "a", "shape": { "Flat": 2 } },
+                { "name": "b", "shape": { "Flat": 5 } }
+            ],
+            "outputs": [{ "name": "output", "shape": { "Flat": 3 } }],
+            "nodes": [
+                {
+                    "id": "join",
+                    "inputs": ["a", "b"],
+                    "outputs": ["output"],
+                    "type": "concat",
+                    "axis": 0,
+                    "input_shapes": [{ "Flat": 2 }, { "Flat": 1 }],
+                    "output_shape": { "Flat": 3 }
+                }
+            ]
+        }
+        "#;
+        let model = Model::from_json(json).unwrap();
+        let err = model.validate_shapes().unwrap_err();
+        assert!(err.contains("'b'"));
     }
 }

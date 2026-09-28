@@ -1,7 +1,9 @@
 mod activation;
 mod add;
+mod concat;
 mod conv;
 mod dense;
+mod expand;
 mod flatten;
 mod gather;
 mod identity;
@@ -9,6 +11,7 @@ mod layers;
 mod maxpool;
 mod rnn;
 mod shape;
+mod squeeze;
 mod transpose;
 mod unsqueeze;
 

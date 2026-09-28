@@ -280,3 +280,163 @@ class GRULayerParser(LayerParser):
             activation_type=activation_type,
             return_sequences=return_sequences,
         )
+
+
+_ONNX_ACTIVATIONS = {"sigmoid": "sigmoid", "tanh": "tanh", "relu": "relu"}
+
+
+def _split_gates(matrix: np.ndarray, hidden_size: int) -> dict[str, np.ndarray]:
+    """ONNX stacks the four gates along the first axis in (i, o, f, c) order.
+    Split them into the per-gate fields the Rust `LSTMLayer` uses (input,
+    output, forget, cell candidate -> i, o, f, g), like `GRULayerParser`
+    does for its gates.
+    """
+    h = hidden_size
+    return {"i": matrix[0:h], "o": matrix[h : 2 * h], "f": matrix[2 * h : 3 * h], "g": matrix[3 * h : 4 * h]}
+
+
+class LSTMLayerParser(LayerParser):
+    def __init__(
+        self,
+        seq_len: int,
+        input_size: int,
+        hidden_size: int,
+        weights_ih: np.ndarray,
+        weights_hh: np.ndarray,
+        bias_ih: np.ndarray,
+        bias_hh: np.ndarray,
+        recurrent_activation_type: str,
+        activation_type: str,
+        cell_activation_type: str,
+        return_sequences: bool,
+    ) -> None:
+        super().__init__("lstm")
+        self.seq_len = seq_len
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        # ONNX layout: weights_ih (4*hidden, input), weights_hh (4*hidden, hidden),
+        # biases (4*hidden), gates stacked in (i, o, f, c) order.
+        self.weights_ih = weights_ih
+        self.weights_hh = weights_hh
+        self.bias_ih = bias_ih
+        self.bias_hh = bias_hh
+        self.recurrent_activation_type = recurrent_activation_type
+        self.activation_type = activation_type
+        self.cell_activation_type = cell_activation_type
+        self.return_sequences = return_sequences
+
+    def to_dict(self) -> dict:
+        w_ih = _split_gates(self.weights_ih, self.hidden_size)
+        w_hh = _split_gates(self.weights_hh, self.hidden_size)
+        b_ih = _split_gates(self.bias_ih, self.hidden_size)
+        b_hh = _split_gates(self.bias_hh, self.hidden_size)
+
+        def flat(a: np.ndarray) -> list[float]:
+            return [float(v) for v in a.flatten()]
+
+        out: dict = {
+            "type": self.layer_type,
+            "seq_len": self.seq_len,
+            "input_size": self.input_size,
+            "hidden_size": self.hidden_size,
+        }
+        # Rust field names: weights_i{i,f,g,o} / weights_h{i,f,g,o} / bias_i{...} / bias_h{...}
+        for gate in ("i", "f", "g", "o"):
+            out[f"weights_i{gate}"] = flat(w_ih[gate])
+            out[f"weights_h{gate}"] = flat(w_hh[gate])
+            out[f"bias_i{gate}"] = flat(b_ih[gate])
+            out[f"bias_h{gate}"] = flat(b_hh[gate])
+        out["recurrent_activation_type"] = self.recurrent_activation_type
+        out["activation_type"] = self.activation_type
+        out["cell_activation_type"] = self.cell_activation_type
+        out["return_sequences"] = self.return_sequences
+        return out
+
+    @classmethod
+    def lstm_layer_from_onnx(cls, node: NodeProto, tensor_shapes: dict, weights: dict) -> Self:
+        name = node.name or "LSTM"
+        attrs = {a.name: a for a in node.attribute}
+
+        direction = attrs["direction"].s.decode() if "direction" in attrs else "forward"
+        if direction != "forward":
+            raise ValueError(f"LSTM node {name} uses direction='{direction}'; only 'forward' is supported")
+        if "layout" in attrs and attrs["layout"].i != 0:
+            raise ValueError(f"LSTM node {name} uses layout=1 (batch-first); only layout=0 is supported")
+        if "input_forget" in attrs and attrs["input_forget"].i != 0:
+            raise ValueError(f"LSTM node {name} uses input_forget; not supported")
+        if "clip" in attrs:
+            raise ValueError(f"LSTM node {name} uses clip; not supported")
+
+        # ONNX order is [f, g, h]: gates, candidate cell state, output-side cell activation.
+        onnx_acts = ["sigmoid", "tanh", "tanh"]
+        if "activations" in attrs:
+            onnx_acts = [a.decode().lower() for a in attrs["activations"].strings]
+            if len(onnx_acts) != 3:
+                raise ValueError(f"LSTM node {name} has activations {onnx_acts}; expected exactly 3 for a forward LSTM")
+        unsupported = [a for a in onnx_acts if a not in _ONNX_ACTIVATIONS]
+        if unsupported:
+            raise ValueError(f"LSTM node {name} uses unsupported activation(s) {unsupported}; supported: {sorted(_ONNX_ACTIVATIONS)}")
+        recurrent_act, candidate_act, cell_act = (_ONNX_ACTIVATIONS[a] for a in onnx_acts)
+
+        # Positional inputs: X, W, R, B, sequence_lens, initial_h, initial_c, P ("" = omitted)
+        inputs = list(node.input) + [""] * (8 - len(node.input))
+        x_name, w_name, r_name, b_name, _seq_lens, h0_name, c0_name, p_name = inputs[:8]
+
+        if p_name:
+            raise ValueError(f"LSTM node {name} uses peephole weights (P); not supported")
+        if w_name not in weights or r_name not in weights:
+            raise ValueError(f"LSTM node {name} needs constant W and R weight tensors")
+
+        # The Rust layer always starts from zero hidden/cell state.
+        for label, state_name in (("initial_h", h0_name), ("initial_c", c0_name)):
+            if not state_name:
+                continue
+            if state_name not in weights:
+                raise ValueError(f"LSTM node {name} has a non-constant {label} '{state_name}'; only zero initial states are supported")
+            if np.any(weights[state_name] != 0):
+                raise ValueError(f"LSTM node {name} has a non-zero {label}; only zero initial states are supported")
+
+        w = weights[w_name]  # (num_directions, 4*hidden, input)
+        r = weights[r_name]  # (num_directions, 4*hidden, hidden)
+        if w.shape[0] != 1:
+            raise ValueError(f"LSTM node {name} has num_directions={w.shape[0]}; only unidirectional is supported")
+        input_size = w.shape[2]
+        hidden_size = r.shape[2]
+
+        if b_name:
+            if b_name not in weights:
+                raise ValueError(f"LSTM node {name} has a non-constant bias B")
+            b = weights[b_name][0]  # (8*hidden): Wb[iofc] then Rb[iofc]
+            bias_ih, bias_hh = b[: 4 * hidden_size], b[4 * hidden_size :]
+        else:
+            bias_ih = bias_hh = np.zeros(4 * hidden_size, dtype=np.float32)
+
+        x_shape = tensor_shapes.get(x_name)
+        if x_shape is None or len(x_shape) != 3:
+            raise ValueError(f"Could not determine a 3D (seq_len, batch, features) input shape for LSTM node {name}")
+        seq_len = x_shape[0]
+
+        # Outputs are Y (all steps), Y_h (final hidden), Y_c (final cell). Exactly
+        # one may be wired downstream (enforced by _build_node).
+        outputs = list(node.output) + [""] * (3 - len(node.output))
+        y, y_h, _y_c = outputs[:3]
+        if y:
+            return_sequences = True
+        elif y_h:
+            return_sequences = False
+        else:
+            raise ValueError(f"LSTM node {name} only exposes Y_c; expose Y or Y_h instead")
+
+        return cls(
+            seq_len,
+            input_size,
+            hidden_size,
+            w[0],
+            r[0],
+            bias_ih,
+            bias_hh,
+            recurrent_act,
+            candidate_act,
+            cell_act,
+            return_sequences,
+        )

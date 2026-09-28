@@ -3,15 +3,18 @@ from ml_runner_exporter.layer import LayerParser
 from ml_runner_exporter.layers.activation import ActivationLayerParser
 from ml_runner_exporter.layers.conv import Conv2DLayerParser
 from ml_runner_exporter.layers.flatten import FlattenLayerParser
+from ml_runner_exporter.layers.onnx.identity import IdentityLayerParser
 from ml_runner_exporter.layers.linear import LinearLayerParser
 from ml_runner_exporter.layers.maxpool import MaxPool2DLayerParser
 from ml_runner_exporter.layers.onnx.add import AddLayerParser
+from ml_runner_exporter.layers.onnx.expand import ExpandLayerParser
+from ml_runner_exporter.layers.onnx.concat import ConcatLayerParser
 from ml_runner_exporter.layers.onnx.gather import GatherLayerParser
-from ml_runner_exporter.layers.onnx.identity import IdentityLayerParser
 from ml_runner_exporter.layers.onnx.shape import ShapeLayerParser
 from ml_runner_exporter.layers.onnx.transpose import TransposeLayerParser
+from ml_runner_exporter.layers.onnx.squeeze import SqueezeLayerParser
 from ml_runner_exporter.layers.onnx.unsqueeze import UnsqueezeLayerParser
-from ml_runner_exporter.layers.rnn import GRULayerParser, RNNLayerParser
+from ml_runner_exporter.layers.rnn import GRULayerParser, LSTMLayerParser, RNNLayerParser
 
 
 def _handle_add(ctx: NodeContext) -> LayerParser:
@@ -19,8 +22,20 @@ def _handle_add(ctx: NodeContext) -> LayerParser:
     return AddLayerParser.add_layer_from_onnx(ctx.node_weights, output_shape)
 
 
+def _handle_concat(ctx: NodeContext) -> LayerParser:
+    return ConcatLayerParser.concat_layer_from_onnx(ctx.node, ctx.tensor_shapes)
+
+
+def _handle_expand(ctx: NodeContext) -> LayerParser:
+    return ExpandLayerParser.expand_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weights)
+
+
 def _handle_transpose(ctx: NodeContext) -> LayerParser:
     return TransposeLayerParser.transpose_layer_from_onnx(ctx.node, ctx.tensor_shapes)
+
+
+def _handle_squeeze(ctx: NodeContext) -> LayerParser:
+    return SqueezeLayerParser.squeeze_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.node_weights)
 
 
 def _handle_unsqueeze(ctx: NodeContext) -> LayerParser:
@@ -67,10 +82,17 @@ def _handle_gru(ctx: NodeContext) -> LayerParser:
     return GRULayerParser.gru_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weights)
 
 
+def _handle_lstm(ctx: NodeContext) -> LayerParser:
+    return LSTMLayerParser.lstm_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weights)
+
+
 OP_HANDLERS = {
     "Add": _handle_add,
+    "Concat": _handle_concat,
+    "Expand": _handle_expand,
     "Transpose": _handle_transpose,
     "Unsqueeze": _handle_unsqueeze,
+    "Squeeze": _handle_squeeze,
     "Shape": _handle_shape,
     "Gather": _handle_gather,
     "Gemm": _handle_gemm,
@@ -85,4 +107,5 @@ OP_HANDLERS = {
     "Softmax": _handle_activation,
     "RNN": _handle_rnn,
     "GRU": _handle_gru,
+    "LSTM": _handle_lstm,
 }
