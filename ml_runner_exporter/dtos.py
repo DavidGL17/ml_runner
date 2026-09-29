@@ -14,3 +14,4 @@ class NodeContext:
     node_weights: list
     weight_matrix: ndarray | None
     bias_vector: ndarray | None
+    rust_dims: dict

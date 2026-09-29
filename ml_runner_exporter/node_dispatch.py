@@ -12,7 +12,7 @@ from ml_runner_exporter.layers.onnx.concat import ConcatLayerParser
 from ml_runner_exporter.layers.onnx.gather import GatherLayerParser
 from ml_runner_exporter.layers.onnx.shape import ShapeLayerParser
 from ml_runner_exporter.layers.onnx.transpose import TransposeLayerParser
-from ml_runner_exporter.layers.onnx.squeeze import SqueezeLayerParser
+from ml_runner_exporter.layers.onnx.squeeze import SqueezeLayerParser, register_recurrent_output
 from ml_runner_exporter.layers.onnx.unsqueeze import UnsqueezeLayerParser
 from ml_runner_exporter.layers.rnn import GRULayerParser, LSTMLayerParser, RNNLayerParser
 
@@ -35,7 +35,7 @@ def _handle_transpose(ctx: NodeContext) -> LayerParser:
 
 
 def _handle_squeeze(ctx: NodeContext) -> LayerParser:
-    return SqueezeLayerParser.squeeze_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.node_weights)
+    return SqueezeLayerParser.squeeze_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weights, ctx.rust_dims)
 
 
 def _handle_unsqueeze(ctx: NodeContext) -> LayerParser:
@@ -47,7 +47,7 @@ def _handle_shape(ctx: NodeContext) -> LayerParser:
 
 
 def _handle_gather(ctx: NodeContext) -> LayerParser:
-    return GatherLayerParser.gather_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weights)
+    return GatherLayerParser.gather_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weights, ctx.rust_dims)
 
 
 def _handle_gemm(ctx: NodeContext) -> LayerParser:
@@ -83,7 +83,11 @@ def _handle_gru(ctx: NodeContext) -> LayerParser:
 
 
 def _handle_lstm(ctx: NodeContext) -> LayerParser:
-    return LSTMLayerParser.lstm_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weights)
+    layer = LSTMLayerParser.lstm_layer_from_onnx(ctx.node, ctx.tensor_shapes, ctx.weights)
+    y, y_h = (list(ctx.node.output) + ["", ""])[:2]
+    register_recurrent_output(ctx.rust_dims, y, "Y", (layer.seq_len, layer.hidden_size))
+    register_recurrent_output(ctx.rust_dims, y_h, "Y_h", (layer.hidden_size,))
+    return layer
 
 
 OP_HANDLERS = {

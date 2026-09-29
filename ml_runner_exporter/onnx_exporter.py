@@ -366,7 +366,7 @@ def _build_node(node: NodeProto, layer: LayerParser, weights: dict, index: int) 
     }
 
 
-def _parse_node(node: NodeProto, tensor_shapes: dict, weights: dict) -> LayerParser:
+def _parse_node(node: NodeProto, tensor_shapes: dict, weights: dict, rust_dims: dict) -> LayerParser:
     node_weights = [weights[inp] for inp in node.input if inp in weights]
     weight_matrix = node_weights[0] if node_weights else None
     bias_vector = node_weights[1] if len(node_weights) > 1 else None
@@ -382,6 +382,7 @@ def _parse_node(node: NodeProto, tensor_shapes: dict, weights: dict) -> LayerPar
         node_weights=node_weights,
         weight_matrix=weight_matrix,
         bias_vector=bias_vector,
+        rust_dims=rust_dims,
     )
     return handler(ctx)
 
@@ -422,8 +423,9 @@ def export_onnx(model_path: str) -> dict:
 
     _prune_unused_outputs(graph, skip_node_names)
 
+    rust_dims: dict = {}
     nodes = [
-        _build_node(node, _parse_node(node, tensor_shapes, weights), weights, i)
+        _build_node(node, _parse_node(node, tensor_shapes, weights, rust_dims), weights, i)
         for i, node in enumerate(graph.node)
         if (node.name or f"node_{i}") not in skip_node_names
     ]
