@@ -62,3 +62,48 @@ class FullConvModel(nn.Module):
         x = self.linear3(x)
         x = self.act5_softmax(x)
         return x
+
+
+# MaxPool alone on a multi-channel input: kernel 2, stride 2, no padding.
+# (2, 4, 4) -> (2, 2, 2). Checks that pooling is per-channel.
+class MaxPoolOnlyModel(nn.Module):
+    def __init__(self):
+        super(MaxPoolOnlyModel, self).__init__()
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        return self.pool(x)
+
+
+# Overlapping/padded pooling: kernel 3, stride 2, padding 1.
+# (2, 6, 6) -> (2, 3, 3). Padding must behave as -inf (never wins the max),
+# and pads in the ONNX node are [top, left, bottom, right].
+class MaxPoolPaddedModel(nn.Module):
+    def __init__(self):
+        super(MaxPoolPaddedModel, self).__init__()
+        self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+    def forward(self, x):
+        return self.pool(x)
+
+
+# Pipeline: Conv2d -> ReLU -> MaxPool2d -> Flatten -> Linear -> Softmax.
+# (1, 4, 4) -> conv (4, 4, 4) -> pool (4, 2, 2) -> flatten 16 -> output_size.
+class ConvPoolModel(nn.Module):
+    def __init__(self, output_size):
+        super(ConvPoolModel, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=4, kernel_size=3, stride=1, padding=1)
+        self.act_relu = nn.ReLU()
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.flatten = nn.Flatten()
+        self.linear = nn.Linear(4 * 2 * 2, output_size)
+        self.act_softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.act_relu(x)
+        x = self.pool(x)
+        x = self.flatten(x)
+        x = self.linear(x)
+        x = self.act_softmax(x)
+        return x

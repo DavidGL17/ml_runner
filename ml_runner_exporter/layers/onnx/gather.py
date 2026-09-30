@@ -86,6 +86,14 @@ class GatherLayerParser(LayerParser):
                 axis = attr.i
                 break
 
+        if entry is None and len(tensor_shapes.get(input_name, ())) > 1:
+            rank = len(tensor_shapes[input_name])
+            if axis < 0:
+                axis += rank
+            if axis == 0:
+                raise ValueError(f"Gather node '{node.name}': gathering along the batch axis isn't supported")
+            axis -= 1
+
         # 4. Try to extract indices if they are constant.
         # ONNX (like numpy) allows negative indices, counting back from the
         # end of the gathered axis - e.g. PyTorch exports `out[:, -1, :]`

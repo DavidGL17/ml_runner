@@ -52,7 +52,7 @@ def _compute_io_specs(graph: GraphProto) -> tuple[list[dict], list[dict]]:
                 _num_directions, _batch, hidden = shape
                 tensor_shape = dims_to_tensor_shape((hidden,))
         else:
-            tensor_shape = dims_to_tensor_shape(tuple(shape[1:]))
+            tensor_shape = dims_to_tensor_shape(tuple(shape[1:]) if len(shape) > 1 else shape)
         outputs.append({"name": out.name, "shape": tensor_shape})
 
     return inputs, outputs
@@ -400,6 +400,8 @@ def export_onnx(model_path: str) -> dict:
         tensor_shapes[inp.name] = tuple(d.dim_value for d in inp.type.tensor_type.shape.dim)
     for info in graph.value_info:
         tensor_shapes[info.name] = tuple(d.dim_value for d in info.type.tensor_type.shape.dim)
+    for out in graph.output:
+        tensor_shapes[out.name] = tuple(d.dim_value for d in out.type.tensor_type.shape.dim)
 
     weights = {init.name: numpy_helper.to_array(init) for init in graph.initializer}
     inputs, outputs = _compute_io_specs(graph)
