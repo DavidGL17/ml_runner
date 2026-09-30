@@ -31,7 +31,7 @@ class ExpandLayerParser(LayerParser):
         shape_name = node.input[1]
         if shape_name not in weights:
             raise ValueError(
-                f"Expand node '{node.name}' has a non-constant target shape '{shape_name}'; " "only constant (statically foldable) shapes are supported"
+                f"Expand node '{node.name}' has a non-constant target shape '{shape_name}'; only constant (statically foldable) shapes are supported"
             )
 
         input_shape = tensor_shapes.get(node.input[0])
@@ -48,5 +48,5 @@ class ExpandLayerParser(LayerParser):
         # parser. Broadcasting aligns trailing dims, so this stays valid even
         # when the input has lower rank than the output.
         if len(input_shape) < 2 or len(full_output) < 2:
-            raise ValueError(f"Expand node '{node.name}': need a batch dimension to strip, " f"got input {tuple(input_shape)} -> output {full_output}")
+            raise ValueError(f"Expand node '{node.name}': need a batch dimension to strip, got input {tuple(input_shape)} -> output {full_output}")
         return cls(tuple(input_shape[1:]), full_output[1:])

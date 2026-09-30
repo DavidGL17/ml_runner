@@ -1,4 +1,5 @@
 from onnx import NodeProto
+
 from ml_runner_exporter.layer import LayerParser
 from ml_runner_exporter.utils import dims_to_tensor_shape
 
@@ -72,7 +73,7 @@ class SqueezeLayerParser(LayerParser):
             for a in rust_axes:
                 if not (0 <= a < len(rust_in)) or rust_in[a] != 1:
                     raise ValueError(
-                        f"Squeeze node '{name}': can't squeeze runtime axis {a} of shape {rust_in} " f"(from ONNX shape {onnx_in}, axes {sorted(requested)})"
+                        f"Squeeze node '{name}': can't squeeze runtime axis {a} of shape {rust_in} (from ONNX shape {onnx_in}, axes {sorted(requested)})"
                     )
             rust_out = squeezed_shape(rust_in, rust_axes)
 

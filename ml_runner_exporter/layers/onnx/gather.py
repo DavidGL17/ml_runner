@@ -42,7 +42,7 @@ class GatherLayerParser(LayerParser):
         }
 
     @classmethod
-    def gather_layer_from_onnx(cls, node: Any, tensor_shapes: dict, weights: dict[str, ndarray], rust_dims: dict | None = None) -> Self:
+    def gather_layer_from_onnx(cls, node: Any, tensor_shapes: dict, weights: dict[str, ndarray], rust_dims: dict | None = None) -> Self:  # noqa: PLR0912
         """
         node: The ONNX node object (needed for 'axis' attribute).
         tensor_shapes: Dictionary of all tensor shapes in the graph.

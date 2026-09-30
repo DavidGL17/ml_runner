@@ -71,7 +71,7 @@ def _prune_unused_outputs(graph: GraphProto, skip_node_names: set[str]) -> None:
     the outputs that are actually wired up.
     """
 
-    def is_skipped(i: int, node) -> bool:
+    def is_skipped(i: int, node: NodeProto) -> bool:
         return (node.name or f"node_{i}") in skip_node_names
 
     used = {out.name for out in graph.output}

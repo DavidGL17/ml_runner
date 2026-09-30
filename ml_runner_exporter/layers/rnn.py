@@ -308,7 +308,7 @@ class LSTMLayerParser(LayerParser):
         recurrent_activation_type: str,
         activation_type: str,
         cell_activation_type: str,
-        return_sequences: bool,
+        return_sequences: bool,  # noqa: FBT001
     ) -> None:
         super().__init__("lstm")
         self.seq_len = seq_len
@@ -353,7 +353,7 @@ class LSTMLayerParser(LayerParser):
         return out
 
     @classmethod
-    def lstm_layer_from_onnx(cls, node: NodeProto, tensor_shapes: dict, weights: dict) -> Self:
+    def lstm_layer_from_onnx(cls, node: NodeProto, tensor_shapes: dict, weights: dict) -> Self:  # noqa: C901, PLR0912, PLR0915
         name = node.name or "LSTM"
         attrs = {a.name: a for a in node.attribute}
 
