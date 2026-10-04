@@ -535,14 +535,14 @@ def sync_project_to_remote(local_root: Path, device: RemoteDevice, timeout: floa
         "bench_work",
         "--exclude",
         "*.onnx",
-        # Deliberately excluded so rsync's --delete never touches it: this
-        # file is device-local config (e.g. `pyenv local 3.14` on a Pi
-        # running a newer/older system Python than your dev machine), not
-        # part of the project itself, and won't exist in most local repos.
-        # Without this exclude, --delete removes it on every sync since it
-        # has no local counterpart to mirror.
         "--exclude",
         ".python-version",
+        "--exclude",
+        "poetry.lock",
+        "--exclude",
+        "dist",
+        "--exclude",
+        "target",
         f"{local_root}/",
         f"{device.host}:{device.remote_dir}/",
     ]
@@ -627,12 +627,12 @@ def provision_device_poetry_env(device: RemoteDevice, local_project_dir: Path, t
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
         return f"failed to copy pyproject.toml to '{device.name}': {_err_tail(e)}"
 
-    lock_path = local_project_dir / "poetry.lock"
-    if lock_path.exists():
+    readme_path = local_project_dir / "README.md"
+    if readme_path.exists():
         try:
-            scp_to_remote(lock_path, device.host, f"{device.remote_dir}/poetry.lock", timeout=timeout)
+            scp_to_remote(readme_path, device.host, f"{device.remote_dir}/README.md", timeout=timeout)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-            return f"failed to copy poetry.lock to '{device.name}': {_err_tail(e)}"
+            return f"failed to copy README.md to '{device.name}': {_err_tail(e)}"
 
     try:
         result = run_remote_cmd(device.host, device.remote_dir, "poetry install", timeout=timeout)
@@ -826,7 +826,22 @@ def main() -> None:  # noqa :C901, PLR0915, PLR0912
         metavar="PATH",
         help=f"Path to a JSON config file with all settings (default: {DEFAULT_CONFIG_PATH.name} next to this script, if present)",
     )
+    parser.add_argument("--print-result", type=Path, required=False, metavar="PATH", help="Just print the results in markdown based on provided json file")
     args = parser.parse_args()
+
+    if args.print_result:
+        try:
+            with open(args.print_result) as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            raise ValueError(f"config file '{args.print_result}' does not exist") from None
+        except json.JSONDecodeError as e:
+            raise ValueError(f"failed to parse config file '{args.print_result}': {e}") from e
+
+        for result in data["results"]:
+            print(print_results(result))
+
+        return
 
     settings, devices = load_config(args.config)
     print(settings)
@@ -861,20 +876,6 @@ def main() -> None:  # noqa :C901, PLR0915, PLR0912
             device_errors[device.name] = preflight_error
             continue
 
-        # Provision the device's Poetry environment for real (copy
-        # pyproject.toml/poetry.lock, then `poetry install`) rather than
-        # assuming it's already set up. This runs whether or not `sync` will
-        # also rsync the whole project below, since it's the actual
-        # dependency check - `sync` is just about getting the rest of the
-        # project (this script, the Rust crate, fixtures, ...) over there.
-        if not device.skip_python:
-            print(f"Provisioning Poetry env on device '{device.name}' ({device.host}:{device.remote_dir})...")
-            provision_error = provision_device_poetry_env(device, local_project_dir, timeout=settings["device_timeout"])
-            if provision_error:
-                print(f"  WARNING: Poetry provisioning for '{device.name}' failed, will skip this device: {provision_error}")
-                device_errors[device.name] = provision_error
-                continue
-
         if not device.sync:
             continue
         print(f"Syncing project to device '{device.name}' ({device.host}:{device.remote_dir})...")
@@ -884,6 +885,15 @@ def main() -> None:  # noqa :C901, PLR0915, PLR0912
             msg = _err_tail(e)
             print(f"  WARNING: sync to '{device.name}' failed, will skip this device: {msg}")
             device_errors[device.name] = msg
+
+        if not device.skip_python:
+            print(f"Provisioning Poetry env on device '{device.name}' ({device.host}:{device.remote_dir})...")
+            provision_error = provision_device_poetry_env(device, local_project_dir, timeout=settings["device_timeout"])
+            if provision_error:
+                print(f"  WARNING: Poetry provisioning for '{device.name}' failed, will skip this device: {provision_error}")
+                device_errors[device.name] = provision_error
+                continue
+
     if devices:
         print()
 

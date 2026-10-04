@@ -70,11 +70,15 @@ max-complexity = 16
 max-args = 20
 max-branches = 14
 
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
 
 [tool.poetry.dependencies]
 python = "^3.14"
 onnx = "1.22.0"
-torch = "2.13.0"
+torch = { version = "2.13.0", source = "pytorch-cpu" }
 onnxruntime = "1.30.0"
 
 
