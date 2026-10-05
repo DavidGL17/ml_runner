@@ -18,12 +18,19 @@ The library supports complex models with multiple inputs and outputs, and with m
 |  Linear   |     yes      |
 |  Conv2D   |     yes      |
 |  Flatten  |     yes      |
+|  MaxPool  |     yes      |
 |    RNN    |     yes      |
 |    GRU    |     yes      |
+|   LSTM    |     yes      |
 |    Add    |     yes      |
+|  Concat   |     yes      |
+|  Expand   |     yes      |
 |  Gather   |     yes      |
+| Identity  |     yes      |
 |   Shape   |     yes      |
+|  Squeeze  |     yes      |
 | Transpose |     yes      |
+| Unsqueeze |     yes      |
 
 #### Supported activation functions
 
@@ -37,13 +44,24 @@ The library supports complex models with multiple inputs and outputs, and with m
 
 ### Supported layers in Rust library
 
-|  layer  | simple forward | BLAS  | simd  | comment |
-| :-----: | :------------: | :---: | :---: | :-----: |
-| Linear  |      yes       |  yes  |  yes  |         |
-| Conv2D  |      yes       |  yes  |  no   |         |
-| Flatten |      yes       |  yes  |  no   |         |
-|   RNN   |      yes       |  yes  |  no   |         |
-|   GRU   |      yes       |  yes  |  no   |         |
+|   layer   | simple forward | BLAS  | simd  | comment |
+| :-------: | :------------: | :---: | :---: | :-----: |
+|  Linear   |      yes       |  yes  |  yes  |         |
+|  Conv2D   |      yes       |  yes  |  no   |         |
+|  Flatten  |      yes       |  yes  |  no   |         |
+|  MaxPool  |      yes       |
+|    RNN    |      yes       |  yes  |  no   |         |
+|    GRU    |      yes       |  yes  |  no   |         |
+|   LSTM    |      yes       |  yes  |  no   |         |
+|    Add    |      yes       |  yes  |  no   |         |
+|  Concat   |      yes       |  yes  |  no   |         |
+|  Expand   |      yes       |  yes  |  no   |         |
+|  Gather   |      yes       |  yes  |  no   |         |
+| Identity  |      yes       |  yes  |  no   |         |
+|   Shape   |      yes       |  yes  |  no   |         |
+|  Squeeze  |      yes       |  yes  |  no   |         |
+| Transpose |      yes       |  yes  |  no   |         |
+| Unsqueeze |      yes       |  yes  |  no   |         |
 
 #### Supported activation functions
 
