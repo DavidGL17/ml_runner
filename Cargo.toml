@@ -32,15 +32,8 @@ openblas-src = { version = "0.10", optional = true, default-features = false, fe
 [features]
 default = []
 
-# Dependency-light SIMD backend for DenseLayer, via the `wide` crate 
-# (portable SIMD on stable Rust - SSE/AVX on x86_64, NEON on aarch64, etc., chosen at compile time from target features, no runtime detection). 
-# Bypasses ndarray's `.dot()` entirely, so nothing needs to be linked at build time - this is the option for embedded/microcontroller targets that support SIMD instructions but have no BLAS port available. Enable with: cargo build --features simd
 simd = ["dep:wide"]
 
-# Routes ndarray's `.dot()` (used by DenseLayer) through a system BLAS library instead of ndarray's built-in matrixmultiply crate. 
-# Fastest option on desktop/server hardware, but requires a BLAS implementation to be discoverable at link time - on Debian/Ubuntu: `apt install libopenblas-dev pkg-config`. 
-# Not generally suitable for microcontroller targets, which won't have a BLAS port; use `simd` there instead. 
-# If both `simd` and `blas` are enabled, `simd` wins. Enable with: cargo build --release --features blas
 blas = ["ndarray/blas", "dep:blas-src", "dep:openblas-src"]
 
 [dev-dependencies]

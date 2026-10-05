@@ -2,7 +2,7 @@ mod activation;
 mod add;
 mod concat;
 mod conv;
-mod dense;
+mod linear;
 mod expand;
 mod flatten;
 mod gather;

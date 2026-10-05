@@ -2,7 +2,7 @@ use crate::activation::ActivationLayer;
 use crate::add::AddLayer;
 use crate::concat::ConcatLayer;
 use crate::conv::Conv2DLayer;
-use crate::dense::DenseLayer;
+use crate::linear::LinearLayer;
 use crate::expand::ExpandLayer;
 use crate::flatten::FlattenLayer;
 use crate::gather::GatherLayer;
@@ -56,7 +56,7 @@ macro_rules! define_layers {
 }
 
 define_layers! {
-    Dense(DenseLayer) => "dense",
+    Dense(LinearLayer) => "dense",
     Activation(ActivationLayer) => "activation",
     Conv2D(Conv2DLayer) => "conv2d",
     Flatten(FlattenLayer) => "flatten",
@@ -112,7 +112,7 @@ mod tests {
 
     #[test]
     fn test_layer_enum_dispatch() {
-        let layer = Layer::Dense(DenseLayer {
+        let layer = Layer::Dense(LinearLayer {
             input_size: 1,
             output_size: 1,
             weights: vec![2.0],
@@ -406,7 +406,7 @@ mod tests {
     /// simply ignored for those variants - so nobody is surprised later.
     #[test]
     fn test_layer_forward_only_uses_first_input_for_now() {
-        let layer = Layer::Dense(DenseLayer {
+        let layer = Layer::Dense(LinearLayer {
             input_size: 1,
             output_size: 1,
             weights: vec![2.0],

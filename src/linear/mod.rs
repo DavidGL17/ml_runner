@@ -1,4 +1,4 @@
-//! The `DenseLayer` type (fields + declared shapes in `layer.rs`). Its
+//! The `LinearLayer` type (fields + declared shapes in `layer.rs`). Its
 //! forward pass lives in exactly one sibling module, chosen at compile
 //! time via this crate's Cargo features (see `Cargo.toml`):
 //!
@@ -24,4 +24,4 @@ mod scalar;
 #[cfg(feature = "simd")]
 mod simd;
 
-pub use layer::DenseLayer;
+pub use layer::LinearLayer;

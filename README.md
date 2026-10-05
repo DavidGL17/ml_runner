@@ -47,13 +47,13 @@ The library supports complex models with multiple inputs and outputs, and with m
 |   layer   | simple forward | BLAS  | simd  | comment |
 | :-------: | :------------: | :---: | :---: | :-----: |
 |  Linear   |      yes       |  yes  |  yes  |         |
-|  Conv2D   |      yes       |  yes  |  no   |         |
+|  Conv2D   |      yes       |  yes  |  yes  |         |
 |  Flatten  |      yes       |  yes  |  no   |         |
-|  MaxPool  |      yes       |
+|  MaxPool  |      yes       |  yes  |  no   |         |
 |    RNN    |      yes       |  yes  |  no   |         |
 |    GRU    |      yes       |  yes  |  no   |         |
 |   LSTM    |      yes       |  yes  |  no   |         |
-|    Add    |      yes       |  yes  |  no   |         |
+|    Add    |      yes       |  yes  |  yes  |         |
 |  Concat   |      yes       |  yes  |  no   |         |
 |  Expand   |      yes       |  yes  |  no   |         |
 |  Gather   |      yes       |  yes  |  no   |         |

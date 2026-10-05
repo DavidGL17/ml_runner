@@ -1,4 +1,4 @@
-//! SIMD-accelerated forward-pass implementation for `DenseLayer`, via the
+//! SIMD-accelerated forward-pass implementation for `LinearLayer`, via the
 //! `wide` crate, which picks portable SIMD instructions (SSE/AVX on
 //! x86_64, NEON on aarch64, etc.) at compile time based on the build's
 //! target features - no runtime CPU detection involved. Only compiled in
@@ -9,7 +9,7 @@
 //! at build time - this is the option for embedded/microcontroller
 //! targets that support SIMD instructions but have no BLAS port available.
 
-use super::DenseLayer;
+use super::LinearLayer;
 use crate::tensor::Tensor;
 use wide::f32x8;
 
@@ -53,12 +53,12 @@ fn dense_forward(
     }
 }
 
-impl DenseLayer {
+impl LinearLayer {
     pub fn forward(&self, input: &Tensor) -> Tensor {
         assert_eq!(
             input.shape(),
             self.input_shape(),
-            "Shape mismatch in DenseLayer: expected {:?}, got {:?}",
+            "Shape mismatch in LinearLayer: expected {:?}, got {:?}",
             self.input_shape(),
             input.shape()
         );
@@ -66,7 +66,7 @@ impl DenseLayer {
         let input_slice = input
             .data
             .as_slice()
-            .expect("DenseLayer input must be a contiguous 1-D tensor");
+            .expect("LinearLayer input must be a contiguous 1-D tensor");
 
         let mut output = vec![0.0; self.output_size];
         dense_forward(
@@ -112,7 +112,7 @@ mod tests {
 
     #[test]
     fn test_dense_layer_forward() {
-        let layer = DenseLayer {
+        let layer = LinearLayer {
             input_size: 2,
             output_size: 1,
             weights: vec![0.5, 0.5],
@@ -127,7 +127,7 @@ mod tests {
 
     #[test]
     fn test_dense_layer_forward_multi_output() {
-        let layer = DenseLayer {
+        let layer = LinearLayer {
             input_size: 2,
             output_size: 2,
             // row 0: [1.0, 0.0], row 1: [0.0, 1.0] -> identity-ish
@@ -140,9 +140,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Shape mismatch in DenseLayer")]
+    #[should_panic(expected = "Shape mismatch in LinearLayer")]
     fn test_dense_layer_wrong_input_shape() {
-        let layer = DenseLayer {
+        let layer = LinearLayer {
             input_size: 2,
             output_size: 1,
             weights: vec![0.5, 0.5],

@@ -1,3 +1,7 @@
+//! The `AddLayer` type itself: fields, declared shapes and input validation.
+//! The forward pass lives in a sibling module - `scalar.rs` by default, or
+//! `simd.rs` with the `simd` Cargo feature - see `add/mod.rs`.
+
 use crate::tensor::{Tensor, TensorShape};
 use serde::{Deserialize, Serialize};
 
@@ -16,46 +20,28 @@ impl AddLayer {
         self.shape.clone()
     }
 
-    pub fn forward(&self, inputs: &[&Tensor]) -> Tensor {
+    /// Checks that `inputs` is non-empty, that every tensor matches this
+    /// layer's shape, and that every constant is either full-size or a
+    /// scalar. Shared by both forward backends so they panic identically.
+    pub(super) fn validate(&self, inputs: &[&Tensor]) {
         assert!(
             !inputs.is_empty(),
             "AddLayer requires at least one tensor input"
         );
 
-        let primary = inputs[0];
-        assert_eq!(
-            primary.shape(),
-            self.input_shape(),
-            "Shape mismatch in AddLayer: expected {:?}, got {:?}",
-            self.input_shape(),
-            primary.shape()
-        );
-
-        let total_size = self.shape.total_size();
-        let mut data = primary.data.clone();
-
-        for extra in &inputs[1..] {
+        for input in inputs {
             assert_eq!(
-                extra.shape(),
+                input.shape(),
                 self.input_shape(),
                 "Shape mismatch in AddLayer: expected {:?}, got {:?}",
                 self.input_shape(),
-                extra.shape()
+                input.shape()
             );
-            for (d, e) in data.iter_mut().zip(extra.data.iter()) {
-                *d += e;
-            }
         }
 
+        let total_size = self.shape.total_size();
         for constant in &self.constants {
-            if constant.len() == total_size {
-                for (d, c) in data.iter_mut().zip(constant.iter()) {
-                    *d += c;
-                }
-            } else if constant.len() == 1 {
-                let c = constant[0];
-                data.mapv_inplace(|v| v + c);
-            } else {
+            if constant.len() != total_size && constant.len() != 1 {
                 panic!(
                     "AddLayer constant length {} doesn't match tensor size {} and isn't a scalar",
                     constant.len(),
@@ -63,11 +49,11 @@ impl AddLayer {
                 );
             }
         }
-
-        Tensor::from_array(data)
     }
 }
 
+// `forward` is provided by whichever backend is compiled in, so these tests
+// exercise the active backend: run them with and without `--features simd`.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,5 +186,15 @@ mod tests {
         };
         let input = Tensor::new(vec![0.0, 0.0, 0.0], TensorShape::Flat(3));
         layer.forward(&[&input]);
+    }
+
+    #[test]
+    #[should_panic(expected = "at least one tensor input")]
+    fn test_forward_rejects_empty_inputs() {
+        let layer = AddLayer {
+            shape: TensorShape::Flat(3),
+            constants: vec![],
+        };
+        layer.forward(&[]);
     }
 }

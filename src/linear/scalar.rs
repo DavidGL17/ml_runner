@@ -1,5 +1,5 @@
-//! Default forward-pass implementation for `DenseLayer`, via `ndarray`'s
-//! `.dot()`. Weights/bias stay as flat `Vec<f32>` fields on `DenseLayer`
+//! Default forward-pass implementation for `LinearLayer`, via `ndarray`'s
+//! `.dot()`. Weights/bias stay as flat `Vec<f32>` fields on `LinearLayer`
 //! (so the JSON model format is unaffected) but are borrowed here as
 //! `ndarray` views - no copying - for the matrix-vector multiply.
 //!
@@ -9,28 +9,28 @@
 //! the `simd` feature is *not* enabled - see `dense/simd.rs` for the
 //! alternative, BLAS-free backend.
 
-use super::DenseLayer;
+use super::LinearLayer;
 use crate::tensor::Tensor;
 use ndarray::{Array1, ArrayView1, ArrayView2, Ix1};
 
-impl DenseLayer {
+impl LinearLayer {
     pub fn forward(&self, input: &Tensor) -> Tensor {
         assert_eq!(
             input.shape(),
             self.input_shape(),
-            "Shape mismatch in DenseLayer: expected {:?}, got {:?}",
+            "Shape mismatch in LinearLayer: expected {:?}, got {:?}",
             self.input_shape(),
             input.shape()
         );
 
         let weights = ArrayView2::from_shape((self.output_size, self.input_size), &self.weights)
-            .expect("DenseLayer weights length doesn't match input_size * output_size");
+            .expect("LinearLayer weights length doesn't match input_size * output_size");
         let bias = ArrayView1::from(&self.bias);
         let input_vec: ArrayView1<f32> = input
             .data
             .view()
             .into_dimensionality::<Ix1>()
-            .expect("DenseLayer input is not 1-D");
+            .expect("LinearLayer input is not 1-D");
 
         // weights (output_size x input_size) * input (input_size) + bias
         let output: Array1<f32> = weights.dot(&input_vec) + bias;
@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn test_dense_layer_forward() {
-        let layer = DenseLayer {
+        let layer = LinearLayer {
             input_size: 2,
             output_size: 1,
             weights: vec![0.5, 0.5],
@@ -61,7 +61,7 @@ mod tests {
 
     #[test]
     fn test_dense_layer_forward_multi_output() {
-        let layer = DenseLayer {
+        let layer = LinearLayer {
             input_size: 2,
             output_size: 2,
             // row 0: [1.0, 0.0], row 1: [0.0, 1.0] -> identity-ish
@@ -74,9 +74,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Shape mismatch in DenseLayer")]
+    #[should_panic(expected = "Shape mismatch in LinearLayer")]
     fn test_dense_layer_wrong_input_shape() {
-        let layer = DenseLayer {
+        let layer = LinearLayer {
             input_size: 2,
             output_size: 1,
             weights: vec![0.5, 0.5],
