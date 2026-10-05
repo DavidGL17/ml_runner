@@ -11,3 +11,4 @@ dist
 .python-version
 bench_work
 combined_benchmark_results.json
+poetry.lock
