@@ -15,63 +15,63 @@ The library supports complex models with multiple inputs and outputs, and with m
 
 |   layer   | ONNX support |
 | :-------: | :----------: |
-|  Linear   |     yes      |
-|  Conv2D   |     yes      |
-|  Flatten  |     yes      |
-|  MaxPool  |     yes      |
-|    RNN    |     yes      |
-|    GRU    |     yes      |
-|   LSTM    |     yes      |
-|    Add    |     yes      |
-|  Concat   |     yes      |
-|  Expand   |     yes      |
-|  Gather   |     yes      |
-| Identity  |     yes      |
-|   Shape   |     yes      |
-|  Squeeze  |     yes      |
-| Transpose |     yes      |
-| Unsqueeze |     yes      |
+|  Linear   |      ✅       |
+|  Conv2D   |      ✅       |
+|  Flatten  |      ✅       |
+|  MaxPool  |      ✅       |
+|    RNN    |      ✅       |
+|    GRU    |      ✅       |
+|   LSTM    |      ✅       |
+|    Add    |      ✅       |
+|  Concat   |      ✅       |
+|  Expand   |      ✅       |
+|  Gather   |      ✅       |
+| Identity  |      ✅       |
+|   Shape   |      ✅       |
+|  Squeeze  |      ✅       |
+| Transpose |      ✅       |
+| Unsqueeze |      ✅       |
 
 #### Supported activation functions
 
 | function | ONNX support |
 | :------: | :----------: |
-|   ReLU   |     yes      |
-| Sigmoid  |     yes      |
-|   Tanh   |     yes      |
-| Softmax  |     yes      |
-|  Linear  |     yes      |
+|   ReLU   |      ✅       |
+| Sigmoid  |      ✅       |
+|   Tanh   |      ✅       |
+| Softmax  |      ✅       |
+|  Linear  |      ✅       |
 
 ### Supported layers in Rust library
 
-|   layer   | simple forward | BLAS  | simd  | comment |
-| :-------: | :------------: | :---: | :---: | :-----: |
-|  Linear   |      yes       |  yes  |  yes  |         |
-|  Conv2D   |      yes       |  yes  |  yes  |         |
-|  Flatten  |      yes       |  yes  |  no   |         |
-|  MaxPool  |      yes       |  yes  |  no   |         |
-|    RNN    |      yes       |  yes  |  no   |         |
-|    GRU    |      yes       |  yes  |  no   |         |
-|   LSTM    |      yes       |  yes  |  no   |         |
-|    Add    |      yes       |  yes  |  yes  |         |
-|  Concat   |      yes       |  yes  |  no   |         |
-|  Expand   |      yes       |  yes  |  no   |         |
-|  Gather   |      yes       |  yes  |  no   |         |
-| Identity  |      yes       |  yes  |  no   |         |
-|   Shape   |      yes       |  yes  |  no   |         |
-|  Squeeze  |      yes       |  yes  |  no   |         |
-| Transpose |      yes       |  yes  |  no   |         |
-| Unsqueeze |      yes       |  yes  |  no   |         |
+|   layer   | simple forward | BLAS  |               simd               | comment |
+| :-------: | :------------: | :---: | :------------------------------: | :-----: |
+|  Linear   |       ✅        |   ✅   |                ✅                 |         |
+|  Conv2D   |       ✅        |   ✅   |                ✅                 |         |
+|  Flatten  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|  MaxPool  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|    RNN    |       ✅        |   ✅   |                ✅                 |         |
+|    GRU    |       ✅        |   ✅   |                ✅                 |         |
+|   LSTM    |       ✅        |   ✅   |                ✅                 |         |
+|    Add    |       ✅        |   ✅   |                ✅                 |         |
+|  Concat   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|  Expand   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|  Gather   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+| Identity  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|   Shape   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|  Squeeze  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+| Transpose |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+| Unsqueeze |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
 
 #### Supported activation functions
 
-| function | simple application | BLAS  | simd  |
-| :------: | :----------------: | :---: | :---: |
-|   ReLU   |        yes         |  yes  |  no   |
-| Sigmoid  |        yes         |  yes  |  no   |
-|   Tanh   |        yes         |  yes  |  no   |
-| Softmax  |        yes         |  yes  |  no   |
-|  Linear  |        yes         |  yes  |  no   |
+| function | simple application | BLAS  |               simd               |
+| :------: | :----------------: | :---: | :------------------------------: |
+|   ReLU   |         ✅          |   ✅   | <span style="color:red">✖</span> |
+| Sigmoid  |         ✅          |   ✅   | <span style="color:red">✖</span> |
+|   Tanh   |         ✅          |   ✅   | <span style="color:red">✖</span> |
+| Softmax  |         ✅          |   ✅   | <span style="color:red">✖</span> |
+|  Linear  |         ✅          |   ✅   | <span style="color:red">✖</span> |
 
 ## Usage
 
@@ -207,7 +207,7 @@ These are the next features that I would like to implement, in no specific order
 - [ ] Add activation functions support in simd
 - [ ] Add support for more layer types
 - [ ] Add support to other optimization backends (cuda, ...)
-- [ ] Export both the python library and rust library to pip/c rates.io for easier usage
+- [ ] Export both the python library and rust library to pip/crates.io for easier usage
 - [ ] Add support for non float models (right now only float is supported, we should allow export and run of models in int)
 - [ ] Implement parser for pytorch and tensorflow models
   - I will focus mainly on tensorflow support at first, since pytorch has a good onnx exporter
