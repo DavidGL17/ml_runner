@@ -4,10 +4,16 @@
 //! `simd` Cargo feature is enabled. Input validation is shared and lives in
 //! `AddLayer::validate` (`add/layer.rs`).
 //!
-//! Addition is elementwise, so the kernels just walk the flat buffer 8
-//! floats at a time with a scalar tail for lengths that aren't a multiple
-//! of the lane count. Each tensor input and each constant is one pass over
-//! the buffer.
+//! Addition is memory-bound, so the kernel is *fused*: it walks the buffer
+//! once, and for each 8-float chunk loads that chunk from every operand
+//! (the primary input, any extra tensor inputs, then the constants), sums
+//! them in a register and stores the result once. That is one read per
+//! operand plus a single write, instead of a full read-modify-write sweep
+//! of the buffer per operand, and it needs no initial copy of the input.
+//!
+//! Operands are summed in a fixed order - primary input, extra tensor
+//! inputs in order, then constants in order - the same order as the scalar
+//! backend, so both produce bit-identical results.
 
 use super::AddLayer;
 use crate::tensor::Tensor;
@@ -15,33 +21,52 @@ use wide::f32x8;
 
 const LANES: usize = 8;
 
-/// `dst[i] += src[i]` for all `i`.
-fn add_assign(dst: &mut [f32], src: &[f32]) {
-    debug_assert_eq!(dst.len(), src.len());
-
-    let chunks = dst.len() / LANES;
-    for c in 0..chunks {
-        let base = c * LANES;
-        let a = f32x8::from(<[f32; LANES]>::try_from(&dst[base..base + LANES]).unwrap());
-        let b = f32x8::from(<[f32; LANES]>::try_from(&src[base..base + LANES]).unwrap());
-        dst[base..base + LANES].copy_from_slice(&(a + b).to_array());
-    }
-    for j in chunks * LANES..dst.len() {
-        dst[j] += src[j];
-    }
+/// One addend of the fused sum: either a full-size buffer or a scalar that
+/// is broadcast across the whole tensor.
+#[derive(Clone, Copy)]
+enum Operand<'a> {
+    Full(&'a [f32]),
+    Scalar(f32),
 }
 
-/// `dst[i] += value` for all `i`.
-fn add_scalar(dst: &mut [f32], value: f32) {
-    let splat = f32x8::splat(value);
-    let chunks = dst.len() / LANES;
+#[inline(always)]
+fn load(s: &[f32], base: usize) -> f32x8 {
+    f32x8::from(<[f32; LANES]>::try_from(&s[base..base + LANES]).unwrap())
+}
+
+/// `out[i] = first[i] + operands[0][i] + operands[1][i] + ...`, accumulated
+/// left to right, in a single pass over the buffers.
+fn fused_add(first: &[f32], operands: &[Operand], out: &mut [f32]) {
+    debug_assert_eq!(first.len(), out.len());
+    debug_assert!(operands.iter().all(|op| match op {
+        Operand::Full(s) => s.len() == first.len(),
+        Operand::Scalar(_) => true,
+    }));
+
+    let chunks = first.len() / LANES;
+
     for c in 0..chunks {
         let base = c * LANES;
-        let a = f32x8::from(<[f32; LANES]>::try_from(&dst[base..base + LANES]).unwrap());
-        dst[base..base + LANES].copy_from_slice(&(a + splat).to_array());
+        let mut acc = load(first, base);
+        for op in operands {
+            acc += match op {
+                Operand::Full(s) => load(s, base),
+                Operand::Scalar(v) => f32x8::splat(*v),
+            };
+        }
+        out[base..base + LANES].copy_from_slice(&acc.to_array());
     }
-    for v in &mut dst[chunks * LANES..] {
-        *v += value;
+
+    // Scalar tail for lengths that aren't a multiple of LANES.
+    for j in chunks * LANES..first.len() {
+        let mut sum = first[j];
+        for op in operands {
+            sum += match op {
+                Operand::Full(s) => s[j],
+                Operand::Scalar(v) => *v,
+            };
+        }
+        out[j] = sum;
     }
 }
 
@@ -55,23 +80,24 @@ impl AddLayer {
     pub fn forward(&self, inputs: &[&Tensor]) -> Tensor {
         self.validate(inputs);
 
-        let mut data = contiguous(inputs[0]).to_vec();
-
-        for extra in &inputs[1..] {
-            add_assign(&mut data, contiguous(extra));
-        }
-
         let total_size = self.shape.total_size();
-        for constant in &self.constants {
-            if constant.len() == total_size {
-                add_assign(&mut data, constant);
+
+        let mut operands: Vec<Operand> =
+            Vec::with_capacity(inputs.len() - 1 + self.constants.len());
+        operands.extend(inputs[1..].iter().map(|t| Operand::Full(contiguous(t))));
+        operands.extend(self.constants.iter().map(|c| {
+            if c.len() == total_size {
+                Operand::Full(c)
             } else {
                 // `validate` guarantees the only other case is a scalar.
-                add_scalar(&mut data, constant[0]);
+                Operand::Scalar(c[0])
             }
-        }
+        }));
 
-        Tensor::new(data, self.output_shape())
+        let mut out = vec![0.0f32; total_size];
+        fused_add(contiguous(inputs[0]), &operands, &mut out);
+
+        Tensor::new(out, self.output_shape())
     }
 }
 
@@ -81,28 +107,39 @@ mod tests {
     use crate::tensor::TensorShape;
 
     #[test]
-    fn add_assign_covers_simd_chunks_and_tail() {
+    fn fused_add_covers_simd_chunks_and_tail() {
         // 19 = two 8-lane chunks + 3 scalar leftovers
-        let mut dst: Vec<f32> = (0..19).map(|x| x as f32).collect();
-        let src: Vec<f32> = (0..19).map(|x| 100.0 + x as f32).collect();
-        let expected: Vec<f32> = dst.iter().zip(&src).map(|(a, b)| a + b).collect();
-        add_assign(&mut dst, &src);
-        assert_eq!(dst, expected);
+        let first: Vec<f32> = (0..19).map(|x| x as f32).collect();
+        let b: Vec<f32> = (0..19).map(|x| 100.0 + x as f32).collect();
+        let c: Vec<f32> = (0..19).map(|x| 0.5 * x as f32).collect();
+        let expected: Vec<f32> = (0..19).map(|i| first[i] + b[i] + 7.0 + c[i]).collect();
+
+        let mut out = vec![0.0; 19];
+        fused_add(
+            &first,
+            &[Operand::Full(&b), Operand::Scalar(7.0), Operand::Full(&c)],
+            &mut out,
+        );
+        assert_eq!(out, expected);
     }
 
     #[test]
-    fn add_assign_shorter_than_one_register() {
-        let mut dst = vec![1.0, 2.0, 3.0];
-        add_assign(&mut dst, &[10.0, 20.0, 30.0]);
-        assert_eq!(dst, vec![11.0, 22.0, 33.0]);
+    fn fused_add_shorter_than_one_register() {
+        let mut out = vec![0.0; 3];
+        fused_add(
+            &[1.0, 2.0, 3.0],
+            &[Operand::Full(&[10.0, 20.0, 30.0])],
+            &mut out,
+        );
+        assert_eq!(out, vec![11.0, 22.0, 33.0]);
     }
 
     #[test]
-    fn add_scalar_covers_simd_chunks_and_tail() {
-        let mut dst: Vec<f32> = (0..11).map(|x| x as f32).collect();
-        let expected: Vec<f32> = dst.iter().map(|x| x + 0.5).collect();
-        add_scalar(&mut dst, 0.5);
-        assert_eq!(dst, expected);
+    fn fused_add_with_no_operands_copies_input() {
+        let first: Vec<f32> = (0..11).map(|x| x as f32).collect();
+        let mut out = vec![0.0; 11];
+        fused_add(&first, &[], &mut out);
+        assert_eq!(out, first);
     }
 
     #[test]
@@ -127,5 +164,28 @@ mod tests {
             .collect();
         assert_eq!(output.to_vec(), expected);
         assert_eq!(output.shape(), shape);
+    }
+
+    /// Operand order is part of the contract: summing out of order can
+    /// change the result in the last bits, so this checks the fused kernel
+    /// matches a strict left-to-right sum on values where order matters.
+    #[test]
+    fn forward_sums_in_scalar_backend_order() {
+        let shape = TensorShape::Flat(9);
+        let layer = AddLayer {
+            shape: shape.clone(),
+            constants: vec![vec![1.0e-8], vec![-1.0e8]],
+        };
+        let data = vec![1.0e8f32; 9];
+        let extra = vec![1.0f32; 9];
+        let a = Tensor::new(data.clone(), shape.clone());
+        let b = Tensor::new(extra.clone(), shape.clone());
+
+        let output = layer.forward(&[&a, &b]);
+
+        let expected: Vec<f32> = (0..9)
+            .map(|i| ((data[i] + extra[i]) + 1.0e-8) + -1.0e8)
+            .collect();
+        assert_eq!(output.to_vec(), expected);
     }
 }
