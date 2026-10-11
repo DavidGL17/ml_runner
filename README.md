@@ -1,5 +1,16 @@
 # ML_RUNNER
 
+[![Crates.io](https://img.shields.io/crates/v/ml_runner)](https://crates.io/crates/ml_runner)
+[![Crates.io downloads](https://img.shields.io/crates/d/ml_runner)](https://crates.io/crates/ml_runner)
+[![docs.rs](https://img.shields.io/docsrs/ml_runner)](https://docs.rs/ml_runner)
+
+[![PyPI](https://img.shields.io/pypi/v/ml-runner-exporter)](https://pypi.org/project/ml-runner-exporter/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/ml-runner-exporter)](https://pypi.org/project/ml-runner-exporter/)
+[![Python versions](https://img.shields.io/pypi/pyversions/ml-runner-exporter)](https://pypi.org/project/ml-runner-exporter/)
+
+[![License](https://img.shields.io/crates/l/ml_runner)](https://crates.io/crates/ml_runner)
+
+
 A small library that aims to provide a fast and device agnostic way of running python ML models in embedded platforms using rust
 
 
