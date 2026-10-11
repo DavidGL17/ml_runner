@@ -1,11 +1,42 @@
 # Benchmark results
 
-Results obtained by running `poetry run python benchmark.py`. It runs a benchmark based on what is configured in [the config file](benchmark_config.json). It will run the following models : 
+Results obtained by running `poetry run python benchmark.py`. It runs a benchmark based on what is configured in [the config file](benchmark_config.json). 
+
+It will run the following models. All of them are small classifiers with 10 output classes, picked to exercise different operator mixes (dense, convolution, residual/batch-norm, recurrent) at very different compute budgets.
+
+|                        Model                         |     Family      |         Input          | Parameters | Operators exercised                                             |
+| :--------------------------------------------------: | :-------------: | :--------------------: | :--------: | :-------------------------------------------------------------- |
+|    [LeNet300100](#results-for-model--lenet300100)    | Fully connected | 784 (flattened 28x28)  |   ~267 K   | Linear, ReLU                                                    |
+|         [LeNet5](#results-for-model--lenet5)         |    Small CNN    |        1x32x32         |   ~62 K    | Conv2d (5x5), MaxPool2d, Linear, ReLU                           |
+|  [ResNet18Cifar](#results-for-model--resnet18cifar)  |  Residual CNN   |        3x32x32         |  ~15.4 M   | Conv2d (3x3, 1x1, 4x4), BatchNorm2d, residual add, ReLU, Linear |
+| [LSTMClassifier](#results-for-model--lstmclassifier) |    Recurrent    | 20 steps x 64 features |   ~233 K   | 2-layer LSTM, Linear, multiple onnx layers                      |
+|    [AlexNetLite](#results-for-model--alexnetlite)    |  Mid-size CNN   |        3x64x64         |  ~1.03 M   | Conv2d (7x7, 5x5, 3x3), MaxPool2d, Linear, ReLU                 |
+
+### LeNet300100
+The classic fully connected baseline from LeCun et al. (1998): three Linear layers over a flattened 28x28 image (784 -> 300 -> 100 -> 10) with ReLU in between. It is the dense-only reference the original LeNet-5 paper compared its convolutional design against. It is the cheapest model here and mostly measures raw matrix-vector/matrix-multiply speed and per-call overhead.
+
+### LeNet5
+The convolutional counterpart from the same paper: two Conv2d (5x5) + ReLU + MaxPool2d (2x2) stages over a 32x32 single-channel input (32x32 -> 28x28 -> 14x14 -> 10x10 -> 5x5, with 6 then 16 channels), followed by three Linear layers (400 -> 120 -> 84 -> 10). It is a small, convolution-dominated workload with tiny channel counts.
+
+### ResNet18Cifar
+ResNet-18 (He et al., 2015) keeping the original structure of 8 BasicBlocks (2 per stage, 4 stages, channels 64/128/256/512). Each block has two 3x3 conv + BatchNorm layers and a residual add, with a 1x1 conv + BatchNorm shortcut when the stride or channel count changes. Two adaptations are made for benchmarking:
+- The ImageNet 7x7 stem + max-pool is replaced by a plain 3x3 conv stem, so it stays practical on 32x32 CIFAR-style inputs.
+- The final global average pool is replaced by a kernel-matched 4x4 Conv2d (4x4 feature map -> 1x1), so the whole model only uses Conv2d, BatchNorm2d, ReLU, elementwise add and Linear, which are the operators the Rust runner supports.
+
+It is by far the heaviest model here and stresses convolution throughput, memory traffic and batch-norm handling.
+
+### LSTMClassifier
+A 2-layer LSTM (Hochreiter & Schmidhuber, 1997) with hidden size 128, run over a synthetic sequence of 20 steps with 64 continuous features per step (no embedding lookup), followed by a Linear head (128 -> 10) on the final time step's output. The input layout is `(seq_len, batch, input_size)`, the default of `nn.LSTM`. It tests recurrent execution: many small, sequentially dependent matrix multiplications plus gate activations.
+
+### AlexNetLite
+An AlexNet-style (Krizhevsky et al., 2012) network: 5 Conv2d + ReLU layers (7x7 stride 2, 5x5, then three 3x3), with MaxPool2d (3x3, stride 2) after the 1st, 2nd and 5th, feeding 3 Linear layers (864 -> 512 -> 256 -> 10). It is scaled down to a 64x64 input (instead of 224x224) with narrower channels so that repeated forward passes stay quick, especially on a Raspberry Pi. Local Response Normalization from the original is dropped, as in most modern reimplementations, since minimal inference engines rarely support it. It sits between LeNet5 and ResNet18Cifar in compute and uses larger kernels and strided convolutions.
+
+> Parameter counts are for the learnable weights and biases (BatchNorm running statistics excluded) and are rounded.
 
 
+## Results
 
-
-## Results for model : LeNet300100
+### Results for model : LeNet300100
 |   Runner   |               Backend               | Runs  |    Min     |    Max     |    Mean    |   Median   |  StdDev   | Errors |
 | :--------: | :---------------------------------: | :---: | :--------: | :--------: | :--------: | :--------: | :-------: | :----: |
 |   python   | PyTorch 2.13.0+cpu (CPU, 6 threads) |  90   | 91.896 µs  | 254.490 µs | 98.498 µs  | 93.746 µs  | 19.302 µs |   0    |
@@ -18,7 +49,7 @@ Results obtained by running `poetry run python benchmark.py`. It runs a benchmar
 |  rust@pi4  |           ndarray (BLAS)            |  90   | 136.740 µs | 407.924 µs | 175.923 µs | 172.888 µs | 42.764 µs |   0    |
 
 
-## Results for model : LeNet5
+### Results for model : LeNet5
 |   Runner   |               Backend               | Runs  |    Min     |    Max     |    Mean    |   Median   |   StdDev   | Errors |
 | :--------: | :---------------------------------: | :---: | :--------: | :--------: | :--------: | :--------: | :--------: | :----: |
 |   python   | PyTorch 2.13.0+cpu (CPU, 6 threads) |  90   | 599.899 µs |  1.163 ms  | 744.490 µs | 717.450 µs | 103.960 µs |   0    |
@@ -31,7 +62,7 @@ Results obtained by running `poetry run python benchmark.py`. It runs a benchmar
 |  rust@pi4  |           ndarray (BLAS)            |  90   |  3.641 ms  |  8.432 ms  |  4.016 ms  |  3.772 ms  | 715.717 µs |   0    |
 
 
-## Results for model : ResNet18Cifar
+### Results for model : ResNet18Cifar
 |   Runner   |               Backend               | Runs  |     Min     |     Max     |    Mean     |   Median    |   StdDev   | Errors |
 | :--------: | :---------------------------------: | :---: | :---------: | :---------: | :---------: | :---------: | :--------: | :----: |
 |   python   | PyTorch 2.13.0+cpu (CPU, 6 threads) |  90   |  11.216 ms  |  13.599 ms  |  12.305 ms  |  12.293 ms  | 624.581 µs |   0    |
@@ -44,7 +75,7 @@ Results obtained by running `poetry run python benchmark.py`. It runs a benchmar
 |  rust@pi4  |           ndarray (BLAS)            |  90   | 5926.182 ms | 9536.005 ms | 5973.480 ms | 5932.462 ms | 377.677 ms |   0    |
 
 
-## Results for model : LSTMClassifier
+### Results for model : LSTMClassifier
 |   Runner   |               Backend               | Runs  |    Min     |    Max     |    Mean    |   Median   |   StdDev   | Errors |
 | :--------: | :---------------------------------: | :---: | :--------: | :--------: | :--------: | :--------: | :--------: | :----: |
 |   python   | PyTorch 2.13.0+cpu (CPU, 6 threads) |  90   | 452.400 µs |  2.612 ms  | 669.788 µs | 591.450 µs | 303.512 µs |   0    |
@@ -57,7 +88,7 @@ Results obtained by running `poetry run python benchmark.py`. It runs a benchmar
 |  rust@pi4  |           ndarray (BLAS)            |  90   |  2.633 ms  |  3.080 ms  |  2.779 ms  |  2.756 ms  | 111.023 µs |   0    |
 
 
-## Results for model : AlexNetLite
+### Results for model : AlexNetLite
 |   Runner   |               Backend               | Runs  |    Min     |    Max     |    Mean    |   Median   |   StdDev   | Errors |
 | :--------: | :---------------------------------: | :---: | :--------: | :--------: | :--------: | :--------: | :--------: | :----: |
 |   python   | PyTorch 2.13.0+cpu (CPU, 6 threads) |  90   | 875.400 µs |  1.745 ms  |  1.184 ms  |  1.179 ms  | 176.547 µs |   0    |
