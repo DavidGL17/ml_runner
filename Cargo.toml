@@ -17,6 +17,10 @@ exclude = [
     "**.ipynb",
     "**.py",
     ".github/**",
+    "lint.sh",
+    "**.json",
+    "Cargo.lock",
+    "benchmark_results",
 ]
 
 [dependencies]

@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - 'rust_[0-9]+.[0-9]+.[0-9]+'
   pull_request:
 
 jobs:
@@ -22,18 +24,18 @@ jobs:
       - name: Run tests in "${{ matrix.FEATURE }}" mode
         run: cargo test -F ${{ matrix.FEATURE }}
 
-
-  # set to publish only on tags like 1.0.0
-  # publish:
-  #   needs: test
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #     - name: Login into crates.io
-  #       run: cargo login ${{ secrets.CRATES_IO }}
-  #     - name: Build binaries in "release" mode
-  #       run: cargo build -r
-  #     - name: "Package for crates.io"
-  #       run: cargo package # verification step before publishing
-  #     - name: "Publish to crates.io"
-  #       run: cargo publish
+  # publish only on tags like rust_1.0.0
+  publish:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/rust_')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Login into crates.io
+        run: cargo login ${{ secrets.CRATES_IO }}
+      - name: Build binaries in "release" mode
+        run: cargo build -r
+      - name: "Package for crates.io"
+        run: cargo package # verification step before publishing
+      - name: "Publish to crates.io"
+        run: cargo publish
