@@ -24,10 +24,10 @@ disallow_untyped_defs = "true"
 warn_incomplete_stub = "true"
 implicit_reexport = "false"
 color_output = "true"
-exclude = ["export_fixtures.py", ".ipynb", "python_fixtures/"]
+exclude = ["export_fixtures.py", ".ipynb", "python_fixtures/", "dist/"]
 
 [[tool.mypy.overrides]]
-module = "python_fixtures.*"
+module = ["python_fixtures.*", "dist.*"]
 ignore_errors = true
 
 
