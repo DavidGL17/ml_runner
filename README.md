@@ -13,6 +13,9 @@
 
 A small library that aims to provide a fast and device agnostic way of running python ML models in embedded platforms using rust
 
+Pypi package : [ml-runner-exporter](https://pypi.org/project/ml-runner-exporter)
+
+Cargo package : [ml-runner](https://crates.io/crates/ml_runner)
 
 ## Features
 
