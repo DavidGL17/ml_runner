@@ -63,7 +63,7 @@ The library supports complex models with multiple inputs and outputs, and with m
 |  Linear   |       ✅        |   ✅   |                ✅                 |         |
 |  Conv2D   |       ✅        |   ✅   |                ✅                 |         |
 |  Flatten  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
-|  MaxPool  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|  MaxPool  |       ✅        |   ✅   |                ✅                 |         |
 |    RNN    |       ✅        |   ✅   |                ✅                 |         |
 |    GRU    |       ✅        |   ✅   |                ✅                 |         |
 |   LSTM    |       ✅        |   ✅   |                ✅                 |         |
