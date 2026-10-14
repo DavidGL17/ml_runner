@@ -1,5 +1,9 @@
+//! The `MaxPool2DLayer` type itself: fields, declared shapes and input
+//! validation. The forward pass lives in a sibling module - `scalar.rs` by
+//! default, or `simd.rs` with the `simd` Cargo feature - see
+//! `maxpool/mod.rs`.
+
 use crate::tensor::{Tensor, TensorShape};
-use ndarray::{Array3, ArrayView3, Ix3};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -22,17 +26,28 @@ impl MaxPool2DLayer {
         }
     }
 
+    /// Spatial output size `(out_h, out_w)`.
+    pub(super) fn output_hw(&self) -> (usize, usize) {
+        (
+            (self.height + 2 * self.padding - self.kernel_size) / self.stride + 1,
+            (self.width + 2 * self.padding - self.kernel_size) / self.stride + 1,
+        )
+    }
+
     /// The shape this layer produces, given a matching input shape.
     /// Channel count is unchanged - pooling only downsamples spatially.
     pub fn output_shape(&self) -> TensorShape {
+        let (out_h, out_w) = self.output_hw();
         TensorShape::D3 {
             dim1: self.channels,
-            dim2: (self.height + 2 * self.padding - self.kernel_size) / self.stride + 1,
-            dim3: (self.width + 2 * self.padding - self.kernel_size) / self.stride + 1,
+            dim2: out_h,
+            dim3: out_w,
         }
     }
 
-    pub fn forward(&self, input: &Tensor) -> Tensor {
+    /// Checks the input shape. Shared by both forward backends so they
+    /// panic identically.
+    pub(super) fn validate(&self, input: &Tensor) {
         assert_eq!(
             input.shape(),
             self.input_shape(),
@@ -40,75 +55,11 @@ impl MaxPool2DLayer {
             self.input_shape(),
             input.shape()
         );
-
-        let out_shape = self.output_shape();
-        let (out_h, out_w) = match out_shape {
-            TensorShape::D3 {
-                dim2: height,
-                dim3: width,
-                ..
-            } => (height, width),
-            _ => unreachable!(),
-        };
-
-        let input_view: ArrayView3<f32> = input
-            .data
-            .view()
-            .into_dimensionality::<Ix3>()
-            .expect("MaxPool2DLayer input is not 3-D");
-
-        let mut output = Array3::<f32>::zeros((self.channels, out_h, out_w));
-
-        let k_i = self.kernel_size as isize;
-        let pad = self.padding as isize;
-        let stride = self.stride as isize;
-        let in_h = self.height as isize;
-        let in_w = self.width as isize;
-
-        for c in 0..self.channels {
-            for oh in 0..out_h {
-                for ow in 0..out_w {
-                    // Unlike Conv2DLayer, out-of-bounds (padded) positions
-                    // are simply skipped rather than treated as zero - a
-                    // zero-padded max-pool would silently corrupt the max
-                    // whenever every real value in the window is negative.
-                    let mut max_val = f32::NEG_INFINITY;
-
-                    for kh in 0..k_i {
-                        let ih = oh as isize * stride + kh - pad;
-                        if ih < 0 || ih >= in_h {
-                            continue;
-                        }
-                        for kw in 0..k_i {
-                            let iw = ow as isize * stride + kw - pad;
-                            if iw < 0 || iw >= in_w {
-                                continue;
-                            }
-
-                            let v = input_view[[c, ih as usize, iw as usize]];
-                            if v > max_val {
-                                max_val = v;
-                            }
-                        }
-                    }
-
-                    assert!(
-                        max_val.is_finite(),
-                        "MaxPool2DLayer: window at (channel {}, {}, {}) contains no in-bounds elements",
-                        c,
-                        oh,
-                        ow
-                    );
-
-                    output[[c, oh, ow]] = max_val;
-                }
-            }
-        }
-
-        Tensor::from_array(output.into_dyn())
     }
 }
 
+// `forward` is provided by whichever backend is compiled in, so these tests
+// exercise the active backend: run them with and without `--features simd`.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -287,5 +238,22 @@ mod tests {
         };
         let wrong_input = Tensor::new(vec![0.0; 10], TensorShape::Flat(10));
         layer.forward(&wrong_input);
+    }
+
+    /// kernel 1 with padding 1: the corner output windows lie entirely in
+    /// the padding, so there is no real value to take the max of.
+    #[test]
+    #[should_panic(expected = "contains no in-bounds elements")]
+    fn test_forward_rejects_window_entirely_in_padding() {
+        let layer = MaxPool2DLayer {
+            kernel_size: 1,
+            stride: 1,
+            padding: 1,
+            channels: 1,
+            height: 2,
+            width: 2,
+        };
+        let input = Tensor::new(vec![1.0, 2.0, 3.0, 4.0], layer.input_shape());
+        layer.forward(&input);
     }
 }
