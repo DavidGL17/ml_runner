@@ -17,6 +17,10 @@ Pypi package : [ml-runner-exporter](https://pypi.org/project/ml-runner-exporter)
 
 Cargo package : [ml-runner](https://crates.io/crates/ml_runner)
 
+### Current state of performance of the library
+
+![speedup results](img/benchmark_rust_speedup.png)
+
 ## Features
 
 - A python library to parse ML models into an exported json format. Exports from : 
@@ -24,68 +28,6 @@ Cargo package : [ml-runner](https://crates.io/crates/ml_runner)
 - A rust library to run the exported models on any platforms, with optimized functions depending on the platforms toolset
 
 The library supports complex models with multiple inputs and outputs, and with multiple paths inside the model.
-
-### Supported layers in python library
-
-|   layer   | ONNX support |
-| :-------: | :----------: |
-|  Linear   |      ✅       |
-|  Conv2D   |      ✅       |
-|  Flatten  |      ✅       |
-|  MaxPool  |      ✅       |
-|    RNN    |      ✅       |
-|    GRU    |      ✅       |
-|   LSTM    |      ✅       |
-|    Add    |      ✅       |
-|  Concat   |      ✅       |
-|  Expand   |      ✅       |
-|  Gather   |      ✅       |
-| Identity  |      ✅       |
-|   Shape   |      ✅       |
-|  Squeeze  |      ✅       |
-| Transpose |      ✅       |
-| Unsqueeze |      ✅       |
-
-#### Supported activation functions
-
-| function | ONNX support |
-| :------: | :----------: |
-|   ReLU   |      ✅       |
-| Sigmoid  |      ✅       |
-|   Tanh   |      ✅       |
-| Softmax  |      ✅       |
-|  Linear  |      ✅       |
-
-### Supported layers in Rust library
-
-|   layer   | simple forward | BLAS  |               simd               | comment |
-| :-------: | :------------: | :---: | :------------------------------: | :-----: |
-|  Linear   |       ✅        |   ✅   |                ✅                 |         |
-|  Conv2D   |       ✅        |   ✅   |                ✅                 |         |
-|  Flatten  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
-|  MaxPool  |       ✅        |   ✅   |                ✅                 |         |
-|    RNN    |       ✅        |   ✅   |                ✅                 |         |
-|    GRU    |       ✅        |   ✅   |                ✅                 |         |
-|   LSTM    |       ✅        |   ✅   |                ✅                 |         |
-|    Add    |       ✅        |   ✅   |                ✅                 |         |
-|  Concat   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
-|  Expand   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
-|  Gather   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
-| Identity  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
-|   Shape   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
-|  Squeeze  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
-| Transpose |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
-| Unsqueeze |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
-
-#### Supported activation functions
-
-| function | simple application | BLAS  |               simd               |
-| :------: | :----------------: | :---: | :------------------------------: |
-|   ReLU   |         ✅          |   ✅   | <span style="color:red">✖</span> |
-| Sigmoid  |         ✅          |   ✅   | <span style="color:red">✖</span> |
-|   Tanh   |         ✅          |   ✅   | <span style="color:red">✖</span> |
-| Softmax  |         ✅          |   ✅   | <span style="color:red">✖</span> |
-|  Linear  |         ✅          |   ✅   | <span style="color:red">✖</span> |
 
 ## Usage
 
@@ -149,6 +91,72 @@ To run the tests, you can use `cargo test --all-features` to run all tests
 ## Benchmarks 
 
 See [benchmark.md](benchmark.md)
+
+## Supported layers
+
+
+### Supported layers in python library
+
+|   layer   | ONNX support |
+| :-------: | :----------: |
+|  Linear   |      ✅       |
+|  Conv2D   |      ✅       |
+|  Flatten  |      ✅       |
+|  MaxPool  |      ✅       |
+|    RNN    |      ✅       |
+|    GRU    |      ✅       |
+|   LSTM    |      ✅       |
+|    Add    |      ✅       |
+|  Concat   |      ✅       |
+|  Expand   |      ✅       |
+|  Gather   |      ✅       |
+| Identity  |      ✅       |
+|   Shape   |      ✅       |
+|  Squeeze  |      ✅       |
+| Transpose |      ✅       |
+| Unsqueeze |      ✅       |
+
+#### Supported activation functions
+
+| function | ONNX support |
+| :------: | :----------: |
+|   ReLU   |      ✅       |
+| Sigmoid  |      ✅       |
+|   Tanh   |      ✅       |
+| Softmax  |      ✅       |
+|  Linear  |      ✅       |
+
+### Supported layers in Rust library
+
+|   layer   | simple forward | BLAS  |               simd               | comment |
+| :-------: | :------------: | :---: | :------------------------------: | :-----: |
+|  Linear   |       ✅        |   ✅   |                ✅                 |         |
+|  Conv2D   |       ✅        |   ✅   |                ✅                 |         |
+|  Flatten  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|  MaxPool  |       ✅        |   ✅   |                ✅                 |         |
+|    RNN    |       ✅        |   ✅   |                ✅                 |         |
+|    GRU    |       ✅        |   ✅   |                ✅                 |         |
+|   LSTM    |       ✅        |   ✅   |                ✅                 |         |
+|    Add    |       ✅        |   ✅   |                ✅                 |         |
+|  Concat   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|  Expand   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|  Gather   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+| Identity  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|   Shape   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|  Squeeze  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+| Transpose |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+| Unsqueeze |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+
+#### Supported activation functions
+
+| function | simple application | BLAS  |               simd               |
+| :------: | :----------------: | :---: | :------------------------------: |
+|   ReLU   |         ✅          |   ✅   | <span style="color:red">✖</span> |
+| Sigmoid  |         ✅          |   ✅   | <span style="color:red">✖</span> |
+|   Tanh   |         ✅          |   ✅   | <span style="color:red">✖</span> |
+| Softmax  |         ✅          |   ✅   | <span style="color:red">✖</span> |
+|  Linear  |         ✅          |   ✅   | <span style="color:red">✖</span> |
+
 
 ## Roadmap
 
