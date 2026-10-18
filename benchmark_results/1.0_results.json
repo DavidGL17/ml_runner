@@ -11,7 +11,7 @@
       "results": [
         {
           "runner": "python",
-          "backend": "PyTorch 2.13.0+cu130 (CPU, 6 threads)",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 6 threads)",
           "input_shape": [
             1,
             784
@@ -76,7 +76,7 @@
           "model": "LeNet300100"
         },
         {
-          "runner": "python",
+          "runner": "python@pi4",
           "backend": "PyTorch 2.13.0+cpu (CPU, 4 threads)",
           "input_shape": [
             1,
@@ -148,7 +148,7 @@
       "results": [
         {
           "runner": "python",
-          "backend": "PyTorch 2.13.0+cu130 (CPU, 6 threads)",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 6 threads)",
           "input_shape": [
             1,
             1,
@@ -215,7 +215,7 @@
           "model": "LeNet5"
         },
         {
-          "runner": "python",
+          "runner": "python@pi4",
           "backend": "PyTorch 2.13.0+cpu (CPU, 4 threads)",
           "input_shape": [
             1,
@@ -289,7 +289,7 @@
       "results": [
         {
           "runner": "python",
-          "backend": "PyTorch 2.13.0+cu130 (CPU, 6 threads)",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 6 threads)",
           "input_shape": [
             1,
             3,
@@ -356,7 +356,7 @@
           "model": "ResNet18Cifar"
         },
         {
-          "runner": "python",
+          "runner": "python@pi4",
           "backend": "PyTorch 2.13.0+cpu (CPU, 4 threads)",
           "input_shape": [
             1,
@@ -430,7 +430,7 @@
       "results": [
         {
           "runner": "python",
-          "backend": "PyTorch 2.13.0+cu130 (CPU, 6 threads)",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 6 threads)",
           "input_shape": [
             20,
             1,
@@ -496,7 +496,7 @@
           "model": "LSTMClassifier"
         },
         {
-          "runner": "python",
+          "runner": "python@pi4",
           "backend": "PyTorch 2.13.0+cpu (CPU, 4 threads)",
           "input_shape": [
             20,
@@ -569,7 +569,7 @@
       "results": [
         {
           "runner": "python",
-          "backend": "PyTorch 2.13.0+cu130 (CPU, 6 threads)",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 6 threads)",
           "input_shape": [
             1,
             3,
@@ -636,7 +636,7 @@
           "model": "AlexNetLite"
         },
         {
-          "runner": "python",
+          "runner": "python@pi4",
           "backend": "PyTorch 2.13.0+cpu (CPU, 4 threads)",
           "input_shape": [
             1,

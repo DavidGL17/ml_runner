@@ -1,0 +1,709 @@
+{
+  "timestamp": "2026-10-17T16:05:21.876661+00:00",
+  "iterations": 100,
+  "seed": 1,
+  "devices": [
+    "pi4"
+  ],
+  "results": [
+    {
+      "model": "LeNet300100",
+      "results": [
+        {
+          "runner": "python",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 6 threads)",
+          "input_shape": [
+            1,
+            784
+          ],
+          "output_shape": [
+            1,
+            10
+          ],
+          "warmup": 10,
+          "errors": 0,
+          "runs": 90,
+          "min_ns": 70428.0,
+          "max_ns": 298354.0,
+          "mean_ns": 100598.95555555556,
+          "median_ns": 98046.5,
+          "std_dev_ns": 35551.358894144214,
+          "model": "LeNet300100"
+        },
+        {
+          "runner": "rust",
+          "backend": "ndarray (matrixmultiply)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 51288.0,
+          "max_ns": 107882.0,
+          "mean_ns": 56595.25555555556,
+          "median_ns": 53265.0,
+          "std_dev_ns": 10006.353089203001,
+          "model": "LeNet300100"
+        },
+        {
+          "runner": "rust",
+          "backend": "simd (wide)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 39288.0,
+          "max_ns": 81590.0,
+          "mean_ns": 40450.811111111114,
+          "median_ns": 39496.0,
+          "std_dev_ns": 4820.590277121314,
+          "model": "LeNet300100"
+        },
+        {
+          "runner": "rust",
+          "backend": "ndarray (BLAS)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 12888.0,
+          "max_ns": 159131.0,
+          "mean_ns": 17355.588888888888,
+          "median_ns": 13824.0,
+          "std_dev_ns": 17947.899451154874,
+          "model": "LeNet300100"
+        },
+        {
+          "runner": "python@pi4",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 4 threads)",
+          "input_shape": [
+            1,
+            784
+          ],
+          "output_shape": [
+            1,
+            10
+          ],
+          "warmup": 10,
+          "errors": 0,
+          "runs": 90,
+          "min_ns": 2648339.0,
+          "max_ns": 11146372.0,
+          "mean_ns": 3474178.422222222,
+          "median_ns": 2737996.0,
+          "std_dev_ns": 2073662.739967155,
+          "model": "LeNet300100"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "ndarray (matrixmultiply)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 195128.0,
+          "max_ns": 295999.0,
+          "mean_ns": 207034.94444444444,
+          "median_ns": 202517.5,
+          "std_dev_ns": 14319.159289692263,
+          "model": "LeNet300100"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "simd (wide)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 207906.0,
+          "max_ns": 1985250.0,
+          "mean_ns": 244208.32222222222,
+          "median_ns": 213101.0,
+          "std_dev_ns": 187309.05032383886,
+          "model": "LeNet300100"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "ndarray (BLAS)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 123481.0,
+          "max_ns": 1919806.0,
+          "mean_ns": 157044.45555555556,
+          "median_ns": 127379.0,
+          "std_dev_ns": 189527.19933087064,
+          "model": "LeNet300100"
+        }
+      ]
+    },
+    {
+      "model": "LeNet5",
+      "results": [
+        {
+          "runner": "python",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 6 threads)",
+          "input_shape": [
+            1,
+            1,
+            32,
+            32
+          ],
+          "output_shape": [
+            1,
+            10
+          ],
+          "warmup": 10,
+          "errors": 0,
+          "runs": 90,
+          "min_ns": 624220.0,
+          "max_ns": 845671.0,
+          "mean_ns": 683673.1666666666,
+          "median_ns": 657489.5,
+          "std_dev_ns": 56508.43599346719,
+          "model": "LeNet5"
+        },
+        {
+          "runner": "rust",
+          "backend": "ndarray (matrixmultiply)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 1091242.0,
+          "max_ns": 1538821.0,
+          "mean_ns": 1118482.0555555555,
+          "median_ns": 1099351.0,
+          "std_dev_ns": 58154.2260081589,
+          "model": "LeNet5"
+        },
+        {
+          "runner": "rust",
+          "backend": "simd (wide)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 140044.0,
+          "max_ns": 196186.0,
+          "mean_ns": 144663.6888888889,
+          "median_ns": 141551.0,
+          "std_dev_ns": 10705.544864066622,
+          "model": "LeNet5"
+        },
+        {
+          "runner": "rust",
+          "backend": "ndarray (BLAS)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 1088122.0,
+          "max_ns": 11041957.0,
+          "mean_ns": 2255061.277777778,
+          "median_ns": 1978758.5,
+          "std_dev_ns": 1255673.8684366967,
+          "model": "LeNet5"
+        },
+        {
+          "runner": "python@pi4",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 4 threads)",
+          "input_shape": [
+            1,
+            1,
+            32,
+            32
+          ],
+          "output_shape": [
+            1,
+            10
+          ],
+          "warmup": 10,
+          "errors": 0,
+          "runs": 90,
+          "min_ns": 3295484.0,
+          "max_ns": 29688597.0,
+          "mean_ns": 5251741.833333333,
+          "median_ns": 3493112.5,
+          "std_dev_ns": 4693732.42477162,
+          "model": "LeNet5"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "ndarray (matrixmultiply)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 3496539.0,
+          "max_ns": 5309641.0,
+          "mean_ns": 3590638.566666667,
+          "median_ns": 3538630.5,
+          "std_dev_ns": 196826.11080161596,
+          "model": "LeNet5"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "simd (wide)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 644330.0,
+          "max_ns": 1652659.0,
+          "mean_ns": 668778.2666666667,
+          "median_ns": 645950.5,
+          "std_dev_ns": 108271.87917129934,
+          "model": "LeNet5"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "ndarray (BLAS)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 3483353.0,
+          "max_ns": 5985897.0,
+          "mean_ns": 3654701.011111111,
+          "median_ns": 3595159.0,
+          "std_dev_ns": 293465.09560871666,
+          "model": "LeNet5"
+        }
+      ]
+    },
+    {
+      "model": "ResNet18Cifar",
+      "results": [
+        {
+          "runner": "python",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 6 threads)",
+          "input_shape": [
+            1,
+            3,
+            32,
+            32
+          ],
+          "output_shape": [
+            1,
+            10
+          ],
+          "warmup": 10,
+          "errors": 0,
+          "runs": 90,
+          "min_ns": 10260271.0,
+          "max_ns": 15034031.0,
+          "mean_ns": 12571929.022222223,
+          "median_ns": 12752463.5,
+          "std_dev_ns": 727036.8359980879,
+          "model": "ResNet18Cifar"
+        },
+        {
+          "runner": "rust",
+          "backend": "ndarray (matrixmultiply)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 1772106516.0,
+          "max_ns": 1953054688.0,
+          "mean_ns": 1813899223.1,
+          "median_ns": 1806062591.0,
+          "std_dev_ns": 27633304.642185073,
+          "model": "ResNet18Cifar"
+        },
+        {
+          "runner": "rust",
+          "backend": "simd (wide)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 120605942.0,
+          "max_ns": 142101724.0,
+          "mean_ns": 126105071.66666667,
+          "median_ns": 124513149.5,
+          "std_dev_ns": 4692581.2874070015,
+          "model": "ResNet18Cifar"
+        },
+        {
+          "runner": "rust",
+          "backend": "ndarray (BLAS)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 1790294841.0,
+          "max_ns": 1896891846.0,
+          "mean_ns": 1816149865.3222222,
+          "median_ns": 1812632160.5,
+          "std_dev_ns": 16541431.511953562,
+          "model": "ResNet18Cifar"
+        },
+        {
+          "runner": "python@pi4",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 4 threads)",
+          "input_shape": [
+            1,
+            3,
+            32,
+            32
+          ],
+          "output_shape": [
+            1,
+            10
+          ],
+          "warmup": 10,
+          "errors": 0,
+          "runs": 90,
+          "min_ns": 115547171.0,
+          "max_ns": 178564465.0,
+          "mean_ns": 123903194.97777778,
+          "median_ns": 121324783.5,
+          "std_dev_ns": 9161407.633978844,
+          "model": "ResNet18Cifar"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "ndarray (matrixmultiply)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 5929147949.0,
+          "max_ns": 8356205519.0,
+          "mean_ns": 6000355446.911111,
+          "median_ns": 5938885262.0,
+          "std_dev_ns": 292481043.5649214,
+          "model": "ResNet18Cifar"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "simd (wide)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 572673130.0,
+          "max_ns": 601163840.0,
+          "mean_ns": 579578386.1222222,
+          "median_ns": 578067210.0,
+          "std_dev_ns": 5434884.981980957,
+          "model": "ResNet18Cifar"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "ndarray (BLAS)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 5922383480.0,
+          "max_ns": 6017778448.0,
+          "mean_ns": 5930836304.066667,
+          "median_ns": 5928134137.0,
+          "std_dev_ns": 10780770.864185726,
+          "model": "ResNet18Cifar"
+        }
+      ]
+    },
+    {
+      "model": "LSTMClassifier",
+      "results": [
+        {
+          "runner": "python",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 6 threads)",
+          "input_shape": [
+            20,
+            1,
+            64
+          ],
+          "output_shape": [
+            1,
+            10
+          ],
+          "warmup": 10,
+          "errors": 0,
+          "runs": 90,
+          "min_ns": 459209.0,
+          "max_ns": 27136786.0,
+          "mean_ns": 1193532.177777778,
+          "median_ns": 623130.0,
+          "std_dev_ns": 3158623.563578923,
+          "model": "LSTMClassifier"
+        },
+        {
+          "runner": "rust",
+          "backend": "ndarray (matrixmultiply)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 1179381.0,
+          "max_ns": 1329781.0,
+          "mean_ns": 1208851.888888889,
+          "median_ns": 1200443.0,
+          "std_dev_ns": 30508.379547063036,
+          "model": "LSTMClassifier"
+        },
+        {
+          "runner": "rust",
+          "backend": "simd (wide)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 853098.0,
+          "max_ns": 1336126.0,
+          "mean_ns": 892550.8888888889,
+          "median_ns": 868544.0,
+          "std_dev_ns": 66369.73795830688,
+          "model": "LSTMClassifier"
+        },
+        {
+          "runner": "rust",
+          "backend": "ndarray (BLAS)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 795164.0,
+          "max_ns": 5901793.0,
+          "mean_ns": 1087365.8666666667,
+          "median_ns": 844465.5,
+          "std_dev_ns": 780446.1635917865,
+          "model": "LSTMClassifier"
+        },
+        {
+          "runner": "python@pi4",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 4 threads)",
+          "input_shape": [
+            20,
+            1,
+            64
+          ],
+          "output_shape": [
+            1,
+            10
+          ],
+          "warmup": 10,
+          "errors": 0,
+          "runs": 90,
+          "min_ns": 5847700.0,
+          "max_ns": 8308795.0,
+          "mean_ns": 6156403.188888889,
+          "median_ns": 6047690.0,
+          "std_dev_ns": 383437.00532154326,
+          "model": "LSTMClassifier"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "ndarray (matrixmultiply)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 3818751.0,
+          "max_ns": 4164324.0,
+          "mean_ns": 3946321.211111111,
+          "median_ns": 3940565.5,
+          "std_dev_ns": 46849.42200556408,
+          "model": "LSTMClassifier"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "simd (wide)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 3691363.0,
+          "max_ns": 4969818.0,
+          "mean_ns": 3904694.4444444445,
+          "median_ns": 3801159.5,
+          "std_dev_ns": 271480.85129391565,
+          "model": "LSTMClassifier"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "ndarray (BLAS)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 2622019.0,
+          "max_ns": 7230376.0,
+          "mean_ns": 2850836.822222222,
+          "median_ns": 2747463.0,
+          "std_dev_ns": 507437.85346881155,
+          "model": "LSTMClassifier"
+        }
+      ]
+    },
+    {
+      "model": "AlexNetLite",
+      "results": [
+        {
+          "runner": "python",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 6 threads)",
+          "input_shape": [
+            1,
+            3,
+            64,
+            64
+          ],
+          "output_shape": [
+            1,
+            10
+          ],
+          "warmup": 10,
+          "errors": 0,
+          "runs": 90,
+          "min_ns": 981240.0,
+          "max_ns": 1569755.0,
+          "mean_ns": 1156496.6,
+          "median_ns": 1127068.0,
+          "std_dev_ns": 149064.52614874914,
+          "model": "AlexNetLite"
+        },
+        {
+          "runner": "rust",
+          "backend": "ndarray (matrixmultiply)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 109857481.0,
+          "max_ns": 127528843.0,
+          "mean_ns": 113266512.24444444,
+          "median_ns": 112995457.5,
+          "std_dev_ns": 2208188.6982844123,
+          "model": "AlexNetLite"
+        },
+        {
+          "runner": "rust",
+          "backend": "simd (wide)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 15116131.0,
+          "max_ns": 22600250.0,
+          "mean_ns": 15782378.066666666,
+          "median_ns": 15666550.0,
+          "std_dev_ns": 823658.9671161616,
+          "model": "AlexNetLite"
+        },
+        {
+          "runner": "rust",
+          "backend": "ndarray (BLAS)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 154604696.0,
+          "max_ns": 190890786.0,
+          "mean_ns": 161014538.32222223,
+          "median_ns": 157849694.5,
+          "std_dev_ns": 6601103.130502276,
+          "model": "AlexNetLite"
+        },
+        {
+          "runner": "python@pi4",
+          "backend": "PyTorch 2.13.0+cpu (CPU, 4 threads)",
+          "input_shape": [
+            1,
+            3,
+            64,
+            64
+          ],
+          "output_shape": [
+            1,
+            10
+          ],
+          "warmup": 10,
+          "errors": 0,
+          "runs": 90,
+          "min_ns": 12399730.0,
+          "max_ns": 34906058.0,
+          "mean_ns": 13870168.922222223,
+          "median_ns": 12871625.0,
+          "std_dev_ns": 3957361.5704147383,
+          "model": "AlexNetLite"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "ndarray (matrixmultiply)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 355665678.0,
+          "max_ns": 369306632.0,
+          "mean_ns": 357904272.17777777,
+          "median_ns": 356108826.0,
+          "std_dev_ns": 3587516.8493317077,
+          "model": "AlexNetLite"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "simd (wide)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 68527258.0,
+          "max_ns": 73766925.0,
+          "mean_ns": 69093771.25555556,
+          "median_ns": 68973801.0,
+          "std_dev_ns": 636535.231279578,
+          "model": "AlexNetLite"
+        },
+        {
+          "runner": "rust@pi4",
+          "backend": "ndarray (BLAS)",
+          "input_shape": null,
+          "output_shape": null,
+          "runs": 90,
+          "warmup": 10,
+          "errors": 0,
+          "min_ns": 355368284.0,
+          "max_ns": 365568974.0,
+          "mean_ns": 356423063.3888889,
+          "median_ns": 355886541.0,
+          "std_dev_ns": 1707081.6586035797,
+          "model": "AlexNetLite"
+        }
+      ]
+    }
+  ]
+}
