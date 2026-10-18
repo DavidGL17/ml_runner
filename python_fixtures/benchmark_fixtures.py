@@ -345,10 +345,13 @@ class RNNoiseLike(nn.Module):
     input, and a sigmoid Dense layer producing 22 band gains per frame.
     The original's ReLU GRU activations become nn.GRU's tanh, and only the
     gains are returned (not the VAD output), since the benchmark expects a
-    single output. Like the original, it runs on a 2-D (frames, features)
-    input with the Dense layers applied per frame."""
+    single output. Like the deployed original, it processes one 10 ms
+    frame per call (SEQ_LEN = 1), so this measures per-frame latency. The
+    Rust Dense layer only takes a single vector, so a multi-frame sequence
+    with per-frame Dense layers isn't expressible anyway. The GRU state
+    starts at zero each call instead of being carried over."""
 
-    SEQ_LEN = 100
+    SEQ_LEN = 1
     INPUT_SIZE = 42
 
     def __init__(self) -> None:

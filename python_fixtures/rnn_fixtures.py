@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 import onnx
 from onnx import helper, numpy_helper, TensorProto
 
@@ -176,3 +177,18 @@ def make_simple_lstm_only_model(input_size, hidden_size, seq_len, seed=None):
 
 def make_simple_lstm_return_sequences_model(input_size, hidden_size, seq_len, seed=None):
     return _build_lstm_model(seq_len, input_size, hidden_size, return_sequences=True, seed=seed)
+
+
+class RNNLastStepModel(torch.nn.Module):
+    """nn.RNN followed by `output[-1]` and a Linear head: torch.onnx.export
+    turns the indexing into a Gather on the RNN's Y output, which only
+    exports if the RNN's recurrent outputs are tracked like GRU/LSTM's."""
+
+    def __init__(self, input_size: int, hidden_size: int, out_features: int):
+        super().__init__()
+        self.rnn = torch.nn.RNN(input_size=input_size, hidden_size=hidden_size)
+        self.fc = torch.nn.Linear(hidden_size, out_features)
+
+    def forward(self, x):
+        output, _ = self.rnn(x)
+        return self.fc(output[-1])

@@ -20,6 +20,7 @@ from python_fixtures.rnn_fixtures import (
     make_simple_rnn_return_sequences_model,
     make_simple_lstm_only_model,
     make_simple_lstm_return_sequences_model,
+    RNNLastStepModel,
 )
 
 from python_fixtures.tensor_op_fixtures import (
@@ -148,6 +149,11 @@ fixtures = [
     {
         "name": "rnn_return_sequences_model.json",
         "model": make_simple_rnn_return_sequences_model(input_size=3, hidden_size=5, seq_len=4),
+        "input_shape": (4, 3),
+    },
+    {
+        "name": "rnn_last_step_model.json",
+        "model": RNNLastStepModel(input_size=3, hidden_size=5, out_features=2),
         "input_shape": (4, 3),
     },
     {

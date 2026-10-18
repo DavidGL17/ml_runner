@@ -1,5 +1,5 @@
 """
-Benchmark LeNet300100 (dense) and LeNet5 (conv) in PyTorch (locally) and in
+Benchmark a set of small dense, conv and recurrent models in PyTorch (locally) and in
 the Rust runner (via `cargo run`, across the `default`, `simd`, and `blas`
 features), then print a single combined Markdown comparison table.
 
@@ -8,6 +8,10 @@ remote devices over SSH (e.g. a Raspberry Pi) via `--device`. This is generic:
 any host you can reach with a plain `ssh <host>` (no interactive login, e.g. an
 SSH key + `~/.ssh/config` alias) can be plugged in.
 
+Before the per-model loop, the PyTorch benchmark runs once on each
+configured device for all selected models (by re-invoking this same script
+there with skip_rust and a "models" filter), and the rows are pulled back.
+
 Flow per model:
   1. Run the PyTorch forward-pass benchmark locally.
   2. Export the model to the Rust runner's JSON format.
@@ -15,8 +19,7 @@ Flow per model:
        - `cargo run --release [--features <feature>] -- <export.json> <iters> <report.json>`
        - read back <report.json>
   4. For each configured --device:
-       - Run the PyTorch benchmark on the device (by re-invoking this same
-         script remotely with --skip-rust) and pull back that model's row.
+       - Add that model's row from the device's PyTorch run above.
        - scp the exported model JSON to the device and run the Rust runner
          there for each of the device's feature sets, pulling back the report.
   5. Collect every run (python, rust x features, and remote equivalents per
@@ -45,6 +48,7 @@ with no arguments at all. Example benchmark_config.json:
   "skip_rust": false,
   "local_project_dir": null,
   "device_timeout": 1800,
+  "models": ["LeNet5", "GRUClassifier"],
   "devices": [
     {
       "name": "pi4",
@@ -59,6 +63,8 @@ with no arguments at all. Example benchmark_config.json:
     }
   ]
 }
+
+"models" restricts the run to those models (default: all of ALL_MODELS).
 
 Any field can be omitted (falls back to the same hardcoded default as
 before), and any CLI flag you do pass overrides the corresponding config
@@ -117,13 +123,58 @@ from torch import nn
 from ml_runner_exporter import export_onnx
 from python_fixtures.benchmark_fixtures import (
     AlexNetLite,
+    ElmanRNNClassifier,
+    GatedMLP,
+    GRUClassifier,
     LeNet5,
     LeNet300100,
     LSTMClassifier,
     ResNet18Cifar,
+    RNNoiseLike,
+    SqueezeNetLite,
 )
 
 RUST_FEATURES = ["default", "simd", "blas"]
+
+# Every benchmark model, as (name, class). Classes rather than instances so
+# a run restricted with the "models" config key only builds what it uses.
+# A model's seed is `seed + its index here`, so keep the order stable:
+# filtering with "models" (as the remote PyTorch runs do) then still feeds
+# each model the same inputs.
+ALL_MODELS: list[tuple[str, type[nn.Module]]] = [
+    # Classic dense-only baseline from LeCun et al. 1998: three Linear
+    # layers over a flattened 28x28 input (784 -> 300 -> 100 -> 10).
+    ("LeNet300100", LeNet300100),
+    # Classic conv architecture from the same paper: two Conv2d+MaxPool2d
+    # stages over a 32x32 single-channel input, feeding into three Linear
+    # layers.
+    ("LeNet5", LeNet5),
+    # ResNet-18 (He et al. 2015): 8 BasicBlocks (2 per stage x 4 stages),
+    # conv + BatchNorm + residual add throughout. CIFAR-sized stem/input
+    # so a full run stays quick.
+    ("ResNet18Cifar", ResNet18Cifar),
+    # A 2-layer LSTM (Hochreiter & Schmidhuber, 1997) classifier over a
+    # short synthetic sequence - the recurrent counterpart to the conv
+    # and dense models above.
+    ("LSTMClassifier", LSTMClassifier),
+    # AlexNet (Krizhevsky et al. 2012)-style: 5 conv layers + 3 Linear
+    # layers, scaled down to a 64x64 input so 1000 iterations stay
+    # reasonable on something like a Raspberry Pi.
+    ("AlexNetLite", AlexNetLite),
+    # SqueezeNet 1.1 (Iandola et al. 2016)-style: Fire modules (channel
+    # Concat of 1x1 and 3x3 expand convs) and a global AvgPool2d head.
+    ("SqueezeNetLite", SqueezeNetLite),
+    # The GRU counterpart of LSTMClassifier, with a Softmax head.
+    ("GRUClassifier", GRUClassifier),
+    # A 2-layer tanh Elman RNN over a 50-step sequence.
+    ("ElmanRNNClassifier", ElmanRNNClassifier),
+    # RNNoise (Valin 2018) topology, one audio frame per call: tanh and
+    # sigmoid Dense layers around three GRUs fed by Concats.
+    ("RNNoiseLike", RNNoiseLike),
+    # Gated Linear Unit blocks (Dauphin et al. 2017): elementwise Mul of a
+    # Linear branch and a sigmoid-gated Linear branch.
+    ("GatedMLP", GatedMLP),
+]
 
 # Default config file location: next to this script, so `python3
 # benchmark.py` with no arguments works regardless of cwd.
@@ -325,7 +376,8 @@ def run_rust_benchmark(rust_dir: Path, export_path: Path, iterations: int, featu
 #
 # The project directory is rsync'd to the device, then:
 #   - the PyTorch benchmark is run by re-invoking *this same script* on the
-#     device with --skip-rust, and reading back its results file.
+#     device with skip_rust (once per device, for every selected model), and
+#     reading back its results file.
 #   - the Rust benchmark is run by scp-ing the exported model JSON over and
 #     invoking `cargo run` on the device, then scp-ing the report back.
 #
@@ -407,6 +459,7 @@ _CONFIG_ALL_FIELDS = (
     "local_project_dir",
     "device_timeout",
     "devices",
+    "models",
 )
 
 
@@ -428,6 +481,15 @@ def load_config_file(path: Path) -> dict:
     unknown = [k for k in data if k not in _CONFIG_ALL_FIELDS]
     if unknown:
         raise ValueError(f"config file '{path}' has unrecognized top-level field(s): {', '.join(unknown)}. Recognized fields: {', '.join(_CONFIG_ALL_FIELDS)}")
+
+    models = data.get("models")
+    if models is not None:
+        known = [name for name, _ in ALL_MODELS]
+        if not isinstance(models, list) or not all(isinstance(m, str) for m in models):
+            raise ValueError(f"config file '{path}': \"models\" must be a list of model names")
+        unknown_models = [m for m in models if m not in known]
+        if unknown_models:
+            raise ValueError(f"config file '{path}': unknown model(s) {', '.join(unknown_models)}. Known models: {', '.join(known)}")
 
     devices_raw = data.get("devices")
     if devices_raw is not None:
@@ -459,6 +521,7 @@ def load_config(path: str) -> tuple[dict, list[RemoteDevice]]:
         "skip_rust": config.get("skip_rust", False),
         "local_project_dir": (Path(config["local_project_dir"]) if config.get("local_project_dir") else None),
         "device_timeout": config.get("device_timeout", 1800),
+        "models": config.get("models"),
     }
 
     return resolved, devices
@@ -645,74 +708,77 @@ def provision_device_poetry_env(device: RemoteDevice, local_project_dir: Path, t
     return None
 
 
-def benchmark_model_remote_python(  # noqa :PLR0911
-    device: RemoteDevice, model_name: str, iterations: int, seed: int, local_work_dir: Path, timeout: float | None = None
-) -> dict:
-    """Run the PyTorch benchmark for one model on a remote device, by
-    re-invoking this same script there with --skip-rust, then scp-ing the
-    results file back and pulling out that model's python row."""
+def benchmark_models_remote_python(
+    device: RemoteDevice, model_names: list[str], iterations: int, seed: int, local_work_dir: Path, timeout: float | None = None
+) -> dict[str, dict]:
+    """Run the PyTorch benchmark for `model_names` on a remote device in a
+    single run, by re-invoking this same script there with skip_rust and a
+    "models" filter, then scp-ing the results file back. Returns each
+    model's python row, keyed by model name. `seed` is the base seed: the
+    remote run derives each model's seed from it exactly like the local one.
+    If the run fails, every model gets the same error row."""
+    runner = f"python@{device.name}"
+
+    def error_rows(message: str) -> dict[str, dict]:
+        return {name: _remote_error_row(runner, device.name, message) for name in model_names}
+
     remote_scratch = f"{device.remote_dir}/_bench_scratch"
     try:
         ensure_remote_dir(device.host, remote_scratch, timeout=timeout)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-        return _remote_error_row(f"python@{device.name}", device.name, f"could not prepare remote scratch dir: {_err_tail(e)}")
+        return error_rows(f"could not prepare remote scratch dir: {_err_tail(e)}")
 
-    remote_results = f"{remote_scratch}/py_only_{model_name}.json"
+    remote_results = f"{remote_scratch}/py_only.json"
 
-    # The remote script's CLI is config-file only (just --config) - it no
-    # longer takes positional iterations or --seed/--skip-rust/--results-file
-    # flags, so write a small standalone config and point --config at it
-    # rather than building an old-style command line. "devices" is
-    # deliberately left out, so this run can't recurse into a devices list
-    # even if the synced project ships its own benchmark_config.json next to
-    # benchmark.py on the device.
+    # "devices" is deliberately left out, so this run can't recurse into a
+    # devices list even if the synced project ships its own
+    # benchmark_config.json next to benchmark.py on the device.
     remote_config = {
         "iterations": iterations,
         "seed": seed,
         "skip_rust": True,
         "results_file": remote_results,
+        "models": model_names,
     }
-    local_config_path = local_work_dir / f"py_only_{model_name}_{device.name}.config.json"
+    local_config_path = local_work_dir / f"py_only_{device.name}.config.json"
     with open(local_config_path, "w") as f:
         json.dump(remote_config, f)
 
-    remote_config_path = f"{remote_scratch}/py_only_{model_name}.config.json"
+    remote_config_path = f"{remote_scratch}/py_only.config.json"
     try:
         scp_to_remote(local_config_path, device.host, remote_config_path, timeout=timeout)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-        return _remote_error_row(f"python@{device.name}", device.name, f"failed to upload remote config: {_err_tail(e)}")
+        return error_rows(f"failed to upload remote config: {_err_tail(e)}")
 
     cmd = f"{device.python_invocation()} benchmark.py --config {shlex.quote(remote_config_path)}"
 
     try:
         result = run_remote_cmd(device.host, device.remote_dir, cmd, timeout=timeout)
     except (subprocess.TimeoutExpired, OSError) as e:
-        return _remote_error_row(f"python@{device.name}", device.name, f"failed to run remote python benchmark: {_err_tail(e)}")
+        return error_rows(f"failed to run remote python benchmark: {_err_tail(e)}")
 
     if result.returncode != 0:
-        return _remote_error_row(
-            f"python@{device.name}", device.name, f"remote python benchmark failed (exit {result.returncode}): {result.stderr.strip()[-500:]}"
-        )
+        return error_rows(f"remote python benchmark failed (exit {result.returncode}): {result.stderr.strip()[-500:]}")
 
-    local_report = local_work_dir / f"py_only_{model_name}_{device.name}.json"
+    local_report = local_work_dir / f"py_only_{device.name}.json"
     try:
         scp_from_remote(device.host, remote_results, local_report, timeout=timeout)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-        return _remote_error_row(f"python@{device.name}", device.name, f"failed to fetch remote results: {_err_tail(e)}")
+        return error_rows(f"failed to fetch remote results: {_err_tail(e)}")
 
     with open(local_report) as f:
         data = json.load(f)
 
+    rows = error_rows("remote results file did not contain a python row for this model")
     for model_result in data.get("results", []):
-        if model_result.get("model") != model_name:
+        name = model_result.get("model")
+        if name not in rows:
             continue
         for row in model_result.get("results", []):
             if row.get("runner") == "python":
-                dict_row = dict(row)
-                dict_row["runner"] = f"python@{device.name}"
-                return dict_row
-
-    return _remote_error_row(f"python@{device.name}", device.name, "remote results file did not contain a python row for this model")
+                rows[name] = {**row, "runner": runner}
+                break
+    return rows
 
 
 def run_rust_benchmark_remote(
@@ -814,7 +880,7 @@ def print_results(result: dict) -> str:
 
 def main() -> None:  # noqa :C901, PLR0915, PLR0912
     parser = argparse.ArgumentParser(
-        description="Benchmark LeNet300100/LeNet5 in PyTorch and in the Rust runner "
+        description="Benchmark a set of models in PyTorch and in the Rust runner "
         "(default/simd/blas), locally and optionally on remote SSH devices, and print one "
         "combined comparison table.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -897,34 +963,27 @@ def main() -> None:  # noqa :C901, PLR0915, PLR0912
     if devices:
         print()
 
-    models = [
-        # Classic dense-only baseline from LeCun et al. 1998: three Linear
-        # layers over a flattened 28x28 input (784 -> 300 -> 100 -> 10).
-        ("LeNet300100", LeNet300100()),
-        # Classic conv architecture from the same paper: two Conv2d+MaxPool2d
-        # stages over a 32x32 single-channel input, feeding into three Linear
-        # layers.
-        ("LeNet5", LeNet5()),
-        # ResNet-18 (He et al. 2015): 8 BasicBlocks (2 per stage x 4 stages),
-        # conv + BatchNorm + residual add throughout. CIFAR-sized stem/input
-        # so a full run stays quick.
-        ("ResNet18Cifar", ResNet18Cifar()),
-        # A 2-layer LSTM (Hochreiter & Schmidhuber, 1997) classifier over a
-        # short synthetic sequence - the recurrent counterpart to the conv
-        # and dense models above.
-        ("LSTMClassifier", LSTMClassifier()),
-        # AlexNet (Krizhevsky et al. 2012)-style: 5 conv layers + 3 Linear
-        # layers, scaled down to a 64x64 input so 1000 iterations stay
-        # reasonable on something like a Raspberry Pi.
-        ("AlexNetLite", AlexNetLite()),
-    ]
+    seeds = {name: settings["seed"] + idx for idx, (name, _) in enumerate(ALL_MODELS)}
+    models = [(name, cls) for name, cls in ALL_MODELS if settings["models"] is None or name in settings["models"]]
+
+    # Remote PyTorch runs: one invocation per device for every selected
+    # model, rather than one per model.
+    remote_python_rows: dict[str, dict[str, dict]] = {}
+    for device in devices:
+        if device.name in device_errors or device.skip_python:
+            continue
+        print(f"Running remote PyTorch benchmarks on '{device.name}'...")
+        remote_python_rows[device.name] = benchmark_models_remote_python(
+            device, [name for name, _ in models], settings["iterations"], settings["seed"], settings["work_dir"], timeout=settings["device_timeout"]
+        )
 
     results = []
     output_to_print = []
 
-    for idx, (name, model) in enumerate(models):
+    for name, model_cls in models:
+        model = model_cls()
         input_shape = model.get_input_dims()  # type: ignore[operator]
-        seed = settings["seed"] + idx
+        seed = seeds[name]
         rows = []
 
         # 1. Local PyTorch run.
@@ -976,10 +1035,7 @@ def main() -> None:  # noqa :C901, PLR0915, PLR0912
                 continue
 
             if not device.skip_python:
-                print(f"Running remote PyTorch benchmark: {name} on '{device.name}'...")
-                remote_py_row = benchmark_model_remote_python(
-                    device, name, settings["iterations"], seed, settings["work_dir"], timeout=settings["device_timeout"]
-                )
+                remote_py_row = remote_python_rows[device.name][name]
                 remote_py_row["model"] = name
                 rows.append(remote_py_row)
 
