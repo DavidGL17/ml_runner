@@ -146,3 +146,42 @@ fn run_transpose_model() {
         epsilon = 1e-4
     );
 }
+
+#[test]
+fn run_mul_model() {
+    let fixture_input = FixtureModelInput::load_json("mul_model.json");
+    let model = Model::from_json(fixture_input.model_json.as_str()).unwrap();
+    let model_output = fixture_input.run(&model);
+
+    assert_abs_diff_eq!(
+        FloatVec(model_output),
+        FloatVec(fixture_input.test_output),
+        epsilon = 1e-4
+    );
+}
+
+#[test]
+fn run_mul_constant_model() {
+    let fixture_input = FixtureModelInput::load_json("mul_constant_model.json");
+    let model = Model::from_json(fixture_input.model_json.as_str()).unwrap();
+    let model_output = fixture_input.run(&model);
+
+    assert_abs_diff_eq!(
+        FloatVec(model_output),
+        FloatVec(fixture_input.test_output),
+        epsilon = 1e-4
+    );
+}
+
+#[test]
+fn run_reshape_model() {
+    let fixture_input = FixtureModelInput::load_json("reshape_model.json");
+    let model = Model::from_json(fixture_input.model_json.as_str()).unwrap();
+    let model_output = fixture_input.run(&model);
+
+    assert_abs_diff_eq!(
+        FloatVec(model_output),
+        FloatVec(fixture_input.test_output),
+        epsilon = 1e-4
+    );
+}

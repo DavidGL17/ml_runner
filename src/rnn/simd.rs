@@ -162,13 +162,13 @@ impl RNNLayer {
 }
 
 impl GRULayer {
-    pub fn forward(&self, input: &Tensor) -> Tensor {
+    pub fn forward_with_state(&self, input: &Tensor, initial_state: Option<&Tensor>) -> Tensor {
         self.validate(input);
 
         let (n_in, n_h) = (self.input_size, self.hidden_size);
         let x = contiguous(input);
 
-        let mut hidden = vec![0.0f32; n_h];
+        let mut hidden = self.initial_hidden(initial_state);
         let mut r = vec![0.0f32; n_h];
         let mut z = vec![0.0f32; n_h];
         let mut n = vec![0.0f32; n_h];

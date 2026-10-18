@@ -101,7 +101,8 @@ impl RNNLayer {
 /// n_t = activation(W_in . x_t + b_in + r_t * (W_hn . h_{t-1} + b_hn))    // candidate state
 /// h_t = (1 - z_t) * n_t + z_t * h_{t-1}
 /// ```
-/// with `h_0` the zero vector and `*` elementwise multiplication.
+/// with `h_0` the zero vector (or an optional second input tensor, see
+/// `forward_with_state`) and `*` elementwise multiplication.
 /// `recurrent_activation` defaults to sigmoid and `activation` to tanh -
 /// the conventional GRU - but both are configurable per layer.
 ///
@@ -206,6 +207,33 @@ impl GRULayer {
             ("bias_hn", &self.bias_hn),
         ] {
             check_len("GRULayer", field, b.len(), self.hidden_size, "hidden_size");
+        }
+    }
+
+    /// Runs the layer from a zero initial hidden state. Test-only: the
+    /// `Layer` dispatch always goes through `forward_with_state`.
+    #[cfg(test)]
+    pub fn forward(&self, input: &Tensor) -> Tensor {
+        self.forward_with_state(input, None)
+    }
+
+    /// The starting hidden state `h_0`: the zero vector, or a copy of
+    /// `initial_state` (ONNX's `initial_h`). Only its element count is
+    /// checked, since the exporter may hand it over as `Flat(hidden)` or
+    /// with ONNX's leftover size-1 `num_directions`/batch axes.
+    pub(super) fn initial_hidden(&self, initial_state: Option<&Tensor>) -> Vec<f32> {
+        match initial_state {
+            None => vec![0.0; self.hidden_size],
+            Some(h0) => {
+                assert_eq!(
+                    h0.shape().total_size(),
+                    self.hidden_size,
+                    "GRULayer initial state has {} elements, expected hidden_size = {}",
+                    h0.shape().total_size(),
+                    self.hidden_size
+                );
+                h0.to_vec()
+            }
         }
     }
 }
@@ -864,5 +892,51 @@ mod tests {
         let layer = scalar_lstm(2, 0.0, 0.0, false);
         let wrong_input = Tensor::new(vec![0.0; 4], TensorShape::Flat(4));
         let _ = layer.forward(&wrong_input);
+    }
+
+    /// A GRU with every weight and bias zero: r = z = sigmoid(0) = 0.5 and
+    /// n = tanh(0) = 0, so each step just halves the hidden state.
+    fn zero_gru(hidden_size: usize) -> GRULayer {
+        let hh = hidden_size * hidden_size;
+        GRULayer {
+            seq_len: 1,
+            input_size: 1,
+            hidden_size,
+            weights_ir: vec![0.0; hidden_size],
+            weights_hr: vec![0.0; hh],
+            bias_ir: vec![0.0; hidden_size],
+            bias_hr: vec![0.0; hidden_size],
+            weights_iz: vec![0.0; hidden_size],
+            weights_hz: vec![0.0; hh],
+            bias_iz: vec![0.0; hidden_size],
+            bias_hz: vec![0.0; hidden_size],
+            weights_in: vec![0.0; hidden_size],
+            weights_hn: vec![0.0; hh],
+            bias_in: vec![0.0; hidden_size],
+            bias_hn: vec![0.0; hidden_size],
+            recurrent_activation_type: ActivationType::Sigmoid,
+            activation_type: ActivationType::Tanh,
+            return_sequences: false,
+        }
+    }
+
+    #[test]
+    fn test_gru_forward_with_initial_state() {
+        let layer = zero_gru(2);
+        let input = Tensor::new(vec![1.0], layer.input_shape());
+        // initial state may keep ONNX's leftover size-1 axes: only its size matters
+        let h0 = Tensor::new(vec![4.0, -2.0], TensorShape::D2 { dim1: 1, dim2: 2 });
+        let output = layer.forward_with_state(&input, Some(&h0));
+        // h_1 = (1 - 0.5) * 0 + 0.5 * h_0
+        assert_eq!(output.to_vec(), vec![2.0, -1.0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "GRULayer initial state has 3 elements")]
+    fn test_gru_forward_rejects_wrong_initial_state_size() {
+        let layer = zero_gru(2);
+        let input = Tensor::new(vec![1.0], layer.input_shape());
+        let h0 = Tensor::new(vec![0.0; 3], TensorShape::Flat(3));
+        let _ = layer.forward_with_state(&input, Some(&h0));
     }
 }

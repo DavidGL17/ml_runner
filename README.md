@@ -102,17 +102,21 @@ See [benchmark.md](benchmark.md)
 |   layer   | ONNX support |
 | :-------: | :----------: |
 |  Linear   |      ✅       |
+|  MatMul   |      ✅       |
 |  Conv2D   |      ✅       |
 |  Flatten  |      ✅       |
 |  MaxPool  |      ✅       |
+|  AvgPool  |      ✅       |
 |    RNN    |      ✅       |
 |    GRU    |      ✅       |
 |   LSTM    |      ✅       |
 |    Add    |      ✅       |
+|    Mul    |      ✅       |
 |  Concat   |      ✅       |
 |  Expand   |      ✅       |
 |  Gather   |      ✅       |
 | Identity  |      ✅       |
+|  Reshape  |      ✅       |
 |   Shape   |      ✅       |
 |  Squeeze  |      ✅       |
 | Transpose |      ✅       |
@@ -136,14 +140,17 @@ See [benchmark.md](benchmark.md)
 |  Conv2D   |       ✅        |   ✅   |                ✅                 |         |
 |  Flatten  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
 |  MaxPool  |       ✅        |   ✅   |                ✅                 |         |
+|  AvgPool  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
 |    RNN    |       ✅        |   ✅   |                ✅                 |         |
 |    GRU    |       ✅        |   ✅   |                ✅                 |         |
 |   LSTM    |       ✅        |   ✅   |                ✅                 |         |
 |    Add    |       ✅        |   ✅   |                ✅                 |         |
+|    Mul    |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
 |  Concat   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
 |  Expand   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
 |  Gather   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
 | Identity  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
+|  Reshape  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
 |   Shape   |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
 |  Squeeze  |       ✅        |   ✅   | <span style="color:red">✖</span> |         |
 | Transpose |       ✅        |   ✅   | <span style="color:red">✖</span> |         |

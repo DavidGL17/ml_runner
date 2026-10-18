@@ -11,7 +11,7 @@ import onnx
 
 from ml_runner_exporter.onnx_exporter import export_onnx
 from python_fixtures.dense_fixtures import SimpleLinearModel
-from python_fixtures.conv_fixtures import SimpleConvOnlyModel, ConvFlattenModel, FullConvModel, MaxPoolOnlyModel, MaxPoolPaddedModel, ConvPoolModel
+from python_fixtures.conv_fixtures import SimpleConvOnlyModel, ConvFlattenModel, FullConvModel, MaxPoolOnlyModel, MaxPoolPaddedModel, ConvPoolModel, AvgPoolOnlyModel, AvgPoolPaddedModel
 from python_fixtures.activation_fixtures import ActivationModel
 from python_fixtures.rnn_fixtures import (
     make_simple_rnn_only_model,
@@ -25,6 +25,7 @@ from python_fixtures.rnn_fixtures import (
 from python_fixtures.tensor_op_fixtures import (
     ConcatModel,
     AddModel,
+    MulModel,
     make_add_broadcast_model,
     make_add_constant_model,
     make_expand_model,
@@ -34,6 +35,9 @@ from python_fixtures.tensor_op_fixtures import (
     make_squeeze_model,
     make_unsqueeze_model,
     make_transpose_model,
+    make_mul_constant_model,
+    make_reshape_model,
+    make_matmul_model,
 )
 
 fixtures_path = "tests/fixtures"
@@ -177,6 +181,10 @@ fixtures = [
     {"name": "squeeze_model.json", "model": make_squeeze_model(), "input_shape": [1, 3, 1, 4]},
     {"name": "unsqueeze_model.json", "model": make_unsqueeze_model(), "input_shape": [1, 3, 4]},
     {"name": "transpose_model.json", "model": make_transpose_model(), "input_shape": [1, 2, 3, 4]},
+    {"name": "mul_model.json", "model": MulModel(10), "input_shape": 10},
+    {"name": "mul_constant_model.json", "model": make_mul_constant_model(), "input_shape": [1, 1, 10]},
+    {"name": "reshape_model.json", "model": make_reshape_model(), "input_shape": [1, 2, 6]},
+    {"name": "matmul_model.json", "model": make_matmul_model(), "input_shape": [1, 10]},
     {
         "name": "maxpool_simple_model.json",
         "model": MaxPoolOnlyModel(),
@@ -185,6 +193,21 @@ fixtures = [
     {
         "name": "maxpool_padded_model.json",
         "model": MaxPoolPaddedModel(),
+        "input_shape": (2, 6, 6),
+    },
+    {
+        "name": "avgpool_simple_model.json",
+        "model": AvgPoolOnlyModel(),
+        "input_shape": (2, 4, 4),
+    },
+    {
+        "name": "avgpool_padded_model.json",
+        "model": AvgPoolPaddedModel(count_include_pad=True),
+        "input_shape": (2, 6, 6),
+    },
+    {
+        "name": "avgpool_padded_exclude_pad_model.json",
+        "model": AvgPoolPaddedModel(count_include_pad=False),
         "input_shape": (2, 6, 6),
     },
     {

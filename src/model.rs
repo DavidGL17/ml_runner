@@ -11,14 +11,33 @@ pub struct Model {
     pub nodes: Vec<Node>,
 }
 
-/// Whether `node` is allowed to read more than one input tensor. `Add`
-/// and `Concat` are the exceptions to the single-input rule: a
-/// residual/skip connection (`x + shortcut(x)`) sums two real computed
-/// tensors rather than one tensor plus baked-in constants, and joining
-/// feature maps needs every operand at once - so a 2+-input node is valid
-/// for either, while every other variant still isn't.
-fn allows_multiple_inputs(op: &Layer) -> bool {
-    matches!(op, Layer::Add(_) | Layer::Concat(_))
+/// The largest number of input tensors `op` may read. `Add`, `Mul` and
+/// `Concat` are the exceptions to the single-input rule: a residual/skip
+/// connection (`x + shortcut(x)`) sums two real computed tensors rather
+/// than one tensor plus baked-in constants, and joining feature maps needs
+/// every operand at once. `Gru` takes an optional second input, its
+/// initial hidden state. Every other variant is strictly single-input.
+fn max_inputs(op: &Layer) -> usize {
+    match op {
+        Layer::Add(_) | Layer::Mul(_) | Layer::Concat(_) => usize::MAX,
+        Layer::Gru(_) => 2,
+        _ => 1,
+    }
+}
+
+/// Rejects a node whose input/output count doesn't fit its layer type
+/// (see `max_inputs`). Shared by `validate_shapes` and `forward`.
+fn check_arity(node: &Node) -> Result<(), String> {
+    if node.outputs.len() != 1 || node.inputs.is_empty() || node.inputs.len() > max_inputs(&node.op) {
+        return Err(format!(
+            "node '{}': unsupported input/output arity for this layer type \
+             (got {} inputs, {} outputs)",
+            node.id,
+            node.inputs.len(),
+            node.outputs.len()
+        ));
+    }
+    Ok(())
 }
 
 impl Model {
@@ -33,13 +52,14 @@ impl Model {
     /// a typo'd tensor name, a conv layer feeding straight into a dense
     /// layer without a Flatten) before any forward pass runs.
     ///
-    /// Every `Layer` variant is single-input/single-output except `Add`
-    /// and `Concat` (see `allows_multiple_inputs`) - a node with any other
-    /// arity is rejected here rather than silently truncated. `Add`'s
+    /// Every `Layer` variant is single-input/single-output except `Add`,
+    /// `Mul`, `Concat` and `Gru` (see `max_inputs`) - a node with any other
+    /// arity is rejected here rather than silently truncated. `Add`/`Mul`
     /// operands all share one declared shape, so they're validated through
     /// the generic per-input loop below like any single-input layer;
-    /// `Concat`'s operands generally differ, so it gets its own
-    /// per-position check instead.
+    /// `Concat`'s operands generally differ, and a `Gru`'s optional initial
+    /// state only has to hold `hidden_size` elements, so those get their
+    /// own per-position checks instead.
     pub fn validate_shapes(&self) -> Result<(), String> {
         let mut shapes: HashMap<String, TensorShape> = self
             .inputs
@@ -48,17 +68,7 @@ impl Model {
             .collect();
 
         for node in &self.nodes {
-            let multi_input_ok = allows_multiple_inputs(&node.op) && node.inputs.len() > 1;
-
-            if node.outputs.len() != 1 || node.inputs.is_empty() || (!multi_input_ok && node.inputs.len() != 1) {
-                return Err(format!(
-                    "node '{}': unsupported input/output arity for this layer type \
-                     (got {} inputs, {} outputs)",
-                    node.id,
-                    node.inputs.len(),
-                    node.outputs.len()
-                ));
-            }
+            check_arity(node)?;
 
             match &node.op {
                 Layer::Concat(concat) => {
@@ -81,6 +91,29 @@ impl Model {
                                 node.id, in_name, in_shape, exp_shape
                             ));
                         }
+                    }
+                }
+                Layer::Gru(gru) if node.inputs.len() == 2 => {
+                    let mut in_shapes = Vec::with_capacity(2);
+                    for in_name in &node.inputs {
+                        in_shapes.push(shapes.get(in_name).ok_or_else(|| {
+                            format!("node '{}' reads undefined tensor '{}'", node.id, in_name)
+                        })?);
+                    }
+                    if *in_shapes[0] != gru.input_shape() {
+                        return Err(format!(
+                            "node '{}': tensor '{}' has shape {:?}, layer expects {:?}",
+                            node.id,
+                            node.inputs[0],
+                            in_shapes[0],
+                            gru.input_shape()
+                        ));
+                    }
+                    if in_shapes[1].total_size() != gru.hidden_size {
+                        return Err(format!(
+                            "node '{}': initial state '{}' has shape {:?}, expected {} elements (hidden_size)",
+                            node.id, node.inputs[1], in_shapes[1], gru.hidden_size
+                        ));
                     }
                 }
                 _ => {
@@ -141,17 +174,7 @@ impl Model {
         let mut env: HashMap<String, Tensor> = inputs;
 
         for node in &self.nodes {
-            let multi_input_ok = allows_multiple_inputs(&node.op) && node.inputs.len() > 1;
-
-            if node.outputs.len() != 1 || node.inputs.is_empty() || (!multi_input_ok && node.inputs.len() != 1) {
-                return Err(format!(
-                    "node '{}': unsupported input/output arity for this layer type \
-                     (got {} inputs, {} outputs)",
-                    node.id,
-                    node.inputs.len(),
-                    node.outputs.len()
-                ));
-            }
+            check_arity(node)?;
 
             let in_tensors: Vec<&Tensor> = node
                 .inputs
@@ -812,5 +835,44 @@ mod tests {
         let model = Model::from_json(json).unwrap();
         let err = model.validate_shapes().unwrap_err();
         assert!(err.contains("'b'"));
+    }
+
+    fn gru_with_state_json(state_size: usize) -> String {
+        format!(
+            r#"{{
+            "inputs": [
+                {{ "name": "x", "shape": {{ "D2": {{ "dim1": 1, "dim2": 1 }} }} }},
+                {{ "name": "h0", "shape": {{ "Flat": {state_size} }} }}
+            ],
+            "outputs": [{{ "name": "h", "shape": {{ "Flat": 1 }} }}],
+            "nodes": [{{
+                "id": "gru", "inputs": ["x", "h0"], "outputs": ["h"], "type": "gru",
+                "seq_len": 1, "input_size": 1, "hidden_size": 1,
+                "weights_ir": [0.0], "weights_hr": [0.0], "bias_ir": [0.0], "bias_hr": [0.0],
+                "weights_iz": [0.0], "weights_hz": [0.0], "bias_iz": [0.0], "bias_hz": [0.0],
+                "weights_in": [0.0], "weights_hn": [0.0], "bias_in": [0.0], "bias_hn": [0.0]
+            }}]
+        }}"#
+        )
+    }
+
+    /// A GRU's optional second input is its initial hidden state.
+    #[test]
+    fn test_gru_initial_state_input() {
+        let model = Model::from_json(&gru_with_state_json(1)).unwrap();
+        model.validate_shapes().unwrap();
+
+        let mut inputs = HashMap::new();
+        inputs.insert("x".to_string(), Tensor::new(vec![1.0], TensorShape::D2 { dim1: 1, dim2: 1 }));
+        inputs.insert("h0".to_string(), Tensor::new(vec![3.0], TensorShape::Flat(1)));
+        // all-zero weights: h_1 = 0.5 * 0 + 0.5 * h_0
+        assert_eq!(model.forward(inputs).unwrap()["h"].to_vec(), vec![1.5]);
+    }
+
+    #[test]
+    fn test_validate_shapes_rejects_wrong_gru_initial_state_size() {
+        let model = Model::from_json(&gru_with_state_json(2)).unwrap();
+        let err = model.validate_shapes().unwrap_err();
+        assert!(err.contains("initial state 'h0'"), "{err}");
     }
 }

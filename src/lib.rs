@@ -1,5 +1,6 @@
 mod activation;
 mod add;
+mod avgpool;
 mod concat;
 mod conv;
 mod linear;
@@ -9,6 +10,8 @@ mod gather;
 mod identity;
 mod layers;
 mod maxpool;
+mod mul;
+mod reshape;
 mod rnn;
 mod shape;
 mod squeeze;

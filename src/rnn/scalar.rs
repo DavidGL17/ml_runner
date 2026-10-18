@@ -71,7 +71,7 @@ impl RNNLayer {
 }
 
 impl GRULayer {
-    pub fn forward(&self, input: &Tensor) -> Tensor {
+    pub fn forward_with_state(&self, input: &Tensor, initial_state: Option<&Tensor>) -> Tensor {
         self.validate(input);
 
         let weights_ir =
@@ -106,7 +106,7 @@ impl GRULayer {
             .into_dimensionality::<Ix2>()
             .expect("GRULayer input is not 2-D");
 
-        let mut hidden = Array1::<f32>::zeros(self.hidden_size);
+        let mut hidden = Array1::from(self.initial_hidden(initial_state));
         let mut outputs: Vec<f32> = if self.return_sequences {
             Vec::with_capacity(self.seq_len * self.hidden_size)
         } else {

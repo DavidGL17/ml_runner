@@ -1,9 +1,12 @@
+import sys
+
 import numpy as np
 import onnx
 from onnx import GraphProto, NodeProto, numpy_helper, shape_inference
 
 from ml_runner_exporter.dtos import NodeContext
 from ml_runner_exporter.layer import LayerParser
+from ml_runner_exporter.layers.onnx.gather import GatherLayerParser
 from ml_runner_exporter.model import export_model
 from ml_runner_exporter.node_dispatch import OP_HANDLERS
 from ml_runner_exporter.utils import dims_to_tensor_shape
@@ -14,7 +17,7 @@ _RECURRENT_OPS = ("RNN", "GRU", "LSTM")
 def _compute_io_specs(graph: GraphProto) -> tuple[list[dict], list[dict]]:
     """Builds the model's IoSpec lists ({"name": ..., "shape": ...}),
     reusing the ONNX graph's own input/output tensor names - these are
-    exactly the names `_build_node` uses for node wiring too, so a node
+    exactly the names `_build_nodes` uses for node wiring too, so a node
     consuming a graph input or producing a graph output lines up
     automatically without any extra bookkeeping.
 
@@ -67,7 +70,7 @@ def _prune_unused_outputs(graph: GraphProto, skip_node_names: set[str]) -> None:
     TorchScript exporter names all of an LSTM's `Y`, `Y_h` and `Y_c` even
     when only one is used downstream. Normalizing them here means both the
     layer parsers (which decide e.g. `return_sequences` from which of
-    `Y`/`Y_h` is present) and `_build_node`'s single-output check see only
+    `Y`/`Y_h` is present) and `_build_nodes`'s single-output check see only
     the outputs that are actually wired up.
     """
 
@@ -329,41 +332,80 @@ def _data_output_names(node: NodeProto) -> list[str]:
     return [name for name in node.output if name]
 
 
-def _build_node(node: NodeProto, layer: LayerParser, weights: dict, index: int) -> dict:
+_MULTI_INPUT_LAYERS = ("add", "concat", "mul")
+_RECURRENT_LAYERS = ("rnn", "gru", "lstm")
+
+
+def _max_data_inputs(layer: LayerParser) -> int:
+    """Mirrors `max_inputs` in the Rust `model.rs`."""
+    if layer.layer_type in _MULTI_INPUT_LAYERS:
+        return sys.maxsize
+    if layer.layer_type == "gru":
+        return 2  # X plus an optional data-flow initial_h
+    return 1
+
+
+def _last_step_gather(node_id: str, y: str, y_h: str, seq_len: int, hidden_size: int) -> dict:
+    """A Rust layer only has one output, so a recurrent node whose `Y` and
+    `Y_h` are both consumed is emitted with `return_sequences` and its `Y`
+    only, and `Y_h` (the final hidden state) is recovered as the last row
+    of `Y` by this extra Gather node.
+    """
+    gather = GatherLayerParser(
+        input_shape=dims_to_tensor_shape((seq_len, hidden_size)),
+        output_shape=dims_to_tensor_shape((hidden_size,)),
+        axis=0,
+        indices=[float(seq_len - 1)],
+    )
+    return {"id": f"{node_id}/Y_h", "inputs": [y], "outputs": [y_h], **gather.to_dict()}
+
+
+def _build_nodes(node: NodeProto, layer: LayerParser, weights: dict, index: int) -> list[dict]:
     """Wraps a parsed `LayerParser` with the graph-wiring fields (`id`,
     `inputs`, `outputs`) the Rust `Node` struct expects.
 
-    Every `Layer` variant on the Rust side is single-input/single-output
-    except `add` and `concat`, which can take more than one real tensor
-    input - a residual/skip connection (`x + shortcut(x)`) sums two
-    computed activations rather than one tensor plus baked-in constants,
-    and joining feature maps needs every operand at once. Anything else
-    with more than one real data input still raises, the same restriction
-    `Model::validate_shapes` enforces at load time.
-    """
-    data_inputs = _data_tensor_names(node, weights)
-    allows_multiple_inputs = layer.layer_type in ("add", "concat")
-    is_multi_input_ok = allows_multiple_inputs and len(data_inputs) > 1
+    Every `Layer` variant on the Rust side is single-output, and
+    single-input except `add`, `mul` and `concat` (which can combine
+    several real tensors, e.g. a residual connection `x + shortcut(x)`)
+    and `gru` (whose optional second input is its initial hidden state).
+    Anything else with more than one real data input still raises, the
+    same restriction `Model::validate_shapes` enforces at load time.
 
-    if len(data_inputs) < 1 or (not is_multi_input_ok and len(data_inputs) != 1):
+    Usually returns a single node; see `_last_step_gather` for the one
+    case that needs two.
+    """
+    node_id = node.name or f"node_{index}"
+    data_inputs = _data_tensor_names(node, weights)
+    if not 1 <= len(data_inputs) <= _max_data_inputs(layer):
         raise ValueError(
-            f"Node '{node.name or index}' ({node.op_type}) has {len(data_inputs)} data "
-            "inputs; only single-input layers (or a multi-input Add/Concat) are supported by the Rust runtime so far"
+            f"Node '{node_id}' ({node.op_type}) has {len(data_inputs)} data inputs; "
+            "only single-input layers (or a multi-input Add/Mul/Concat, or a GRU with an initial state) "
+            "are supported by the Rust runtime so far"
         )
 
     data_outputs = _data_output_names(node)
+    extra_nodes = []
+    if layer.layer_type in _RECURRENT_LAYERS and len(data_outputs) == 2 and node.output[0] and node.output[1]:
+        y, y_h = data_outputs
+        seq_len, hidden_size = layer.seq_len, layer.hidden_size  # type: ignore[attr-defined]
+        extra_nodes.append(_last_step_gather(node_id, y, y_h, seq_len, hidden_size))
+        data_outputs = [y]
+
     if len(data_outputs) != 1:
         raise ValueError(
-            f"Node '{node.name or index}' ({node.op_type}) has {len(data_outputs)} outputs; "
+            f"Node '{node_id}' ({node.op_type}) has {len(data_outputs)} outputs; "
             "only single-output layers are supported by the Rust runtime so far"
         )
 
-    return {
-        "id": node.name or f"node_{index}",
-        "inputs": data_inputs,
-        "outputs": data_outputs,
-        **layer.to_dict(),
-    }
+    return [
+        {
+            "id": node_id,
+            "inputs": data_inputs,
+            "outputs": data_outputs,
+            **layer.to_dict(),
+        },
+        *extra_nodes,
+    ]
 
 
 def _parse_node(node: NodeProto, tensor_shapes: dict, weights: dict, rust_dims: dict) -> LayerParser:
@@ -427,9 +469,10 @@ def export_onnx(model_path: str) -> dict:
 
     rust_dims: dict = {}
     nodes = [
-        _build_node(node, _parse_node(node, tensor_shapes, weights, rust_dims), weights, i)
+        built
         for i, node in enumerate(graph.node)
         if (node.name or f"node_{i}") not in skip_node_names
+        for built in _build_nodes(node, _parse_node(node, tensor_shapes, weights, rust_dims), weights, i)
     ]
 
     return export_model(nodes, inputs, outputs)

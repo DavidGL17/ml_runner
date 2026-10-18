@@ -228,6 +228,15 @@ class GRULayerParser(LayerParser):
         if len(node.input) < 3 or node.input[1] not in weights or node.input[2] not in weights:
             raise ValueError(f"GRU node {node.name} is missing its W/R weight tensors")
 
+        # Positional inputs: X, W, R, B, sequence_lens, initial_h ("" = omitted).
+        # A data-flow initial_h becomes the Rust layer's optional second input
+        # (see `_build_nodes`); a constant one can only be the default zeros.
+        _seq_lens, h0_name = [*list(node.input), "", "", ""][4:6]
+        if _seq_lens:
+            raise ValueError(f"GRU node {node.name} uses sequence_lens; not supported")
+        if h0_name in weights and np.any(weights[h0_name] != 0):
+            raise ValueError(f"GRU node {node.name} has a non-zero constant initial_h; only zero or graph-computed initial states are supported")
+
         # W: (3*hidden_size, input_size), R: (3*hidden_size, hidden_size),
         # both concatenated in ONNX's gate order [z, r, h] (update, reset,
         # candidate) - NOT the same order as this struct's field names, which
@@ -417,7 +426,7 @@ class LSTMLayerParser(LayerParser):
         seq_len = x_shape[0]
 
         # Outputs are Y (all steps), Y_h (final hidden), Y_c (final cell). Exactly
-        # one may be wired downstream (enforced by _build_node).
+        # one may be wired downstream (enforced by _build_nodes).
         outputs = list(node.output) + [""] * (3 - len(node.output))
         y, y_h, _y_c = outputs[:3]
         if y:

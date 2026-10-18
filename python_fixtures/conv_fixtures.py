@@ -87,6 +87,28 @@ class MaxPoolPaddedModel(nn.Module):
         return self.pool(x)
 
 
+# AvgPool alone: kernel 2, stride 2, no padding. (2, 4, 4) -> (2, 2, 2).
+class AvgPoolOnlyModel(nn.Module):
+    def __init__(self):
+        super(AvgPoolOnlyModel, self).__init__()
+        self.pool = nn.AvgPool2d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        return self.pool(x)
+
+
+# Padded AvgPool: kernel 3, stride 2, padding 1. (2, 6, 6) -> (2, 3, 3).
+# count_include_pad picks whether border windows divide by 9 (PyTorch's
+# default) or only by the number of real input elements they cover.
+class AvgPoolPaddedModel(nn.Module):
+    def __init__(self, count_include_pad):
+        super(AvgPoolPaddedModel, self).__init__()
+        self.pool = nn.AvgPool2d(kernel_size=3, stride=2, padding=1, count_include_pad=count_include_pad)
+
+    def forward(self, x):
+        return self.pool(x)
+
+
 # Pipeline: Conv2d -> ReLU -> MaxPool2d -> Flatten -> Linear -> Softmax.
 # (1, 4, 4) -> conv (4, 4, 4) -> pool (4, 2, 2) -> flatten 16 -> output_size.
 class ConvPoolModel(nn.Module):

@@ -1,5 +1,6 @@
 from typing import Self
 
+import numpy as np
 from numpy import ndarray
 
 from ml_runner_exporter.layer import LayerParser
@@ -41,4 +42,22 @@ class LinearLayerParser(LayerParser):
             output_size=output_size,
             weights=weight_matrix.tolist() if weight_matrix is not None else [],
             bias=bias_vector.tolist() if bias_vector is not None else [],
+        )
+
+    @classmethod
+    def linear_layer_from_onnx_matmul(cls, input_shape: tuple, weight_matrix: ndarray | None) -> Self:
+        """A `MatMul` of a (batch, in) activation with a constant (in, out)
+        matrix is a bias-less Dense layer (TensorFlow's `Tensordot` lowers
+        to exactly this, with the bias as a separate `Add`).
+        """
+        if weight_matrix is None or weight_matrix.ndim != 2:
+            raise ValueError("MatMul node needs a constant 2D right-hand operand to be exported as a dense layer")
+        if len(input_shape) != 2:
+            raise ValueError(f"MatMul node has a {len(input_shape)}D input {input_shape}; only a (batch, features) input is supported")
+        weights = weight_matrix.T
+        return cls(
+            input_size=int(weights.shape[1]),
+            output_size=int(weights.shape[0]),
+            weights=weights.tolist(),
+            bias=np.zeros(weights.shape[0], dtype=np.float32).tolist(),
         )

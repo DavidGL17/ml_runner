@@ -243,3 +243,157 @@ class AlexNetLite(nn.Module):
 
     def get_input_dims(self) -> tuple[int, int, int]:
         return (3, 64, 64)
+
+
+class _Fire(nn.Module):
+    """One SqueezeNet Fire module: a 1x1 "squeeze" conv, then parallel 1x1
+    and 3x3 "expand" convs whose outputs are concatenated along channels."""
+
+    def __init__(self, in_channels: int, squeeze: int, expand1x1: int, expand3x3: int) -> None:
+        super().__init__()
+        self.squeeze = nn.Sequential(nn.Conv2d(in_channels, squeeze, kernel_size=1), nn.ReLU(inplace=True))
+        self.expand1x1 = nn.Sequential(nn.Conv2d(squeeze, expand1x1, kernel_size=1), nn.ReLU(inplace=True))
+        self.expand3x3 = nn.Sequential(nn.Conv2d(squeeze, expand3x3, kernel_size=3, padding=1), nn.ReLU(inplace=True))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.squeeze(x)
+        return torch.cat([self.expand1x1(x), self.expand3x3(x)], dim=1)
+
+
+class SqueezeNetLite(nn.Module):
+    """SqueezeNet 1.1 (Iandola et al. 2016)-style: a strided 3x3 conv stem,
+    then Fire modules (channel-wise Concat) interleaved with MaxPool2d, a
+    1x1 conv classifier and a global AvgPool2d instead of any Linear layer.
+    Scaled to a 64x64 input with the original 1.1 channel widths for the
+    first 4 Fire modules. The global average pool is a fixed-size
+    nn.AvgPool2d rather than AdaptiveAvgPool2d."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=3, stride=2),  # 64x64 -> 31x31
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),  # -> 15x15
+            _Fire(64, 16, 64, 64),
+            _Fire(128, 16, 64, 64),
+            nn.MaxPool2d(kernel_size=3, stride=2),  # -> 7x7
+            _Fire(128, 32, 128, 128),
+            _Fire(256, 32, 128, 128),
+        )
+        self.classifier = nn.Sequential(
+            nn.Conv2d(256, 10, kernel_size=1),
+            nn.ReLU(inplace=True),
+            nn.AvgPool2d(kernel_size=7),  # 7x7 -> 1x1
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.classifier(self.features(x))
+        return torch.flatten(x, 1)
+
+    def get_input_dims(self) -> tuple[int, int, int]:
+        return (3, 64, 64)
+
+
+class GRUClassifier(nn.Module):
+    """A 2-layer GRU (Cho et al. 2014) classifier: the GRU counterpart of
+    LSTMClassifier, with the same sequence shape and hidden size, and a
+    Softmax over the 10 classes."""
+
+    SEQ_LEN = 20
+    INPUT_SIZE = 64
+    HIDDEN_SIZE = 128
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.gru = nn.GRU(input_size=self.INPUT_SIZE, hidden_size=self.HIDDEN_SIZE, num_layers=2)
+        self.fc = nn.Linear(self.HIDDEN_SIZE, 10)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        output, _ = self.gru(x)
+        return torch.softmax(self.fc(output[-1]), dim=-1)
+
+    def get_input_dims(self) -> tuple[int, int]:
+        return (self.SEQ_LEN, self.INPUT_SIZE)
+
+
+class ElmanRNNClassifier(nn.Module):
+    """A 2-layer Elman RNN (Elman 1990, nn.RNN with tanh) over a longer
+    sequence than the LSTM/GRU classifiers, since each step is much
+    cheaper, followed by a Linear head on the final time step."""
+
+    SEQ_LEN = 50
+    INPUT_SIZE = 32
+    HIDDEN_SIZE = 128
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.rnn = nn.RNN(input_size=self.INPUT_SIZE, hidden_size=self.HIDDEN_SIZE, num_layers=2, nonlinearity="tanh")
+        self.fc = nn.Linear(self.HIDDEN_SIZE, 10)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        output, _ = self.rnn(x)
+        return self.fc(output[-1])
+
+    def get_input_dims(self) -> tuple[int, int]:
+        return (self.SEQ_LEN, self.INPUT_SIZE)
+
+
+class RNNoiseLike(nn.Module):
+    """The RNNoise (Valin 2018) topology: a tanh Dense layer over 42 audio
+    features, then three stacked GRUs (VAD 24, noise 48, denoise 96) where
+    each later GRU reads the concatenation of the earlier outputs and the
+    input, and a sigmoid Dense layer producing 22 band gains per frame.
+    The original's ReLU GRU activations become nn.GRU's tanh, and only the
+    gains are returned (not the VAD output), since the benchmark expects a
+    single output. Like the original, it runs on a 2-D (frames, features)
+    input with the Dense layers applied per frame."""
+
+    SEQ_LEN = 100
+    INPUT_SIZE = 42
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.input_dense = nn.Linear(self.INPUT_SIZE, 24)
+        self.vad_gru = nn.GRU(24, 24)
+        self.noise_gru = nn.GRU(24 + 24 + self.INPUT_SIZE, 48)
+        self.denoise_gru = nn.GRU(24 + 48 + self.INPUT_SIZE, 96)
+        self.denoise_output = nn.Linear(96, 22)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (seq_len, batch, features) -> per-frame Dense on (seq_len*batch, features)
+        seq_len, batch, features = x.shape
+        frames = x.reshape(seq_len * batch, features)
+        tmp = torch.tanh(self.input_dense(frames)).reshape(seq_len, batch, 24)
+        vad, _ = self.vad_gru(tmp)
+        noise, _ = self.noise_gru(torch.cat([tmp, vad, x], dim=2))
+        denoise, _ = self.denoise_gru(torch.cat([vad, noise, x], dim=2))
+        return torch.sigmoid(self.denoise_output(denoise.reshape(seq_len * batch, 96)))
+
+    def get_input_dims(self) -> tuple[int, int]:
+        return (self.SEQ_LEN, self.INPUT_SIZE)
+
+
+class GatedMLP(nn.Module):
+    """A stack of Gated Linear Unit blocks (Dauphin et al. 2017): each
+    block computes Linear_a(x) * sigmoid(Linear_b(x)), i.e. an elementwise
+    Mul of two branches, followed by a Linear head. A dense workload like
+    LeNet300100 but exercising Mul and Sigmoid."""
+
+    INPUT_DIMS = 512
+    HIDDEN = 1024
+    BLOCKS = 3
+
+    def __init__(self) -> None:
+        super().__init__()
+        dims = [self.INPUT_DIMS] + [self.HIDDEN] * self.BLOCKS
+        self.values = nn.ModuleList([nn.Linear(dims[i], dims[i + 1]) for i in range(self.BLOCKS)])
+        self.gates = nn.ModuleList([nn.Linear(dims[i], dims[i + 1]) for i in range(self.BLOCKS)])
+        self.fc = nn.Linear(self.HIDDEN, 10)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for value, gate in zip(self.values, self.gates):
+            x = value(x) * torch.sigmoid(gate(x))
+        return self.fc(x)
+
+    def get_input_dims(self) -> int:
+        return self.INPUT_DIMS

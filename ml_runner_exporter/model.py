@@ -7,7 +7,7 @@ def export_model(nodes: list[dict], inputs: list[dict], outputs: list[dict]) -> 
     where `shape` is already in TensorShape's serde representation (e.g.
     {"Flat": 10} or {"D3": {"dim1": 3, "dim2": 4, "dim3": 5}}).
 
-    `nodes` are already-built graph node dicts (see `_build_node` in
+    `nodes` are already-built graph node dicts (see `_build_nodes` in
     `onnx_exporter.py`): each has "id", "inputs", "outputs", plus whatever
     a `LayerParser.to_dict()` contributes (the "type" tag and the layer's
     own fields), matching the `Node` struct on the Rust side.

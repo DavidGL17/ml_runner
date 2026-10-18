@@ -30,6 +30,16 @@ class ConcatModel(nn.Module):
         return torch.cat([x, self.linear(x)], dim=1)
 
 
+# Gated product of two computed tensors: Mul with two dynamic inputs.
+class MulModel(nn.Module):
+    def __init__(self, size):
+        super().__init__()
+        self.linear = nn.Linear(size, size)
+
+    def forward(self, x):
+        return torch.sigmoid(self.linear(x)) * x
+
+
 # ---------------------------------------------------------------------------
 # Hand-built ONNX models
 # ---------------------------------------------------------------------------
@@ -126,3 +136,38 @@ def make_unsqueeze_model():
 def make_transpose_model():
     node = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 3, 1, 2], name="transpose")
     return _build_single_node_model("transpose_model", node, [1, 2, 3, 4], [1, 4, 2, 3])
+
+
+# (1, 1, 10) * constant of shape (10,): a frozen BatchNorm-style scale,
+# broadcast over the leading dims.
+def make_mul_constant_model():
+    rng = np.random.default_rng()
+    const = rng.standard_normal((10,)).astype(np.float32)
+    node = helper.make_node("Mul", ["X", "C"], ["Y"], name="mul")
+    return _build_single_node_model(
+        "mul_constant_model",
+        node,
+        [1, 1, 10],
+        [1, 1, 10],
+        [numpy_helper.from_array(const, name="C")],
+    )
+
+
+# (1, 2, 6) -> (1, 3, 4): a general reshape that isn't a flatten.
+def make_reshape_model():
+    node = helper.make_node("Reshape", ["X", "shape"], ["Y"], name="reshape")
+    return _build_single_node_model("reshape_model", node, [1, 2, 6], [1, 3, 4], [_int64("shape", [1, 3, -1])])
+
+
+# (1, 10) @ constant (10, 5): TensorFlow's bias-less Dense lowering.
+def make_matmul_model():
+    rng = np.random.default_rng()
+    weights = rng.standard_normal((10, 5)).astype(np.float32)
+    node = helper.make_node("MatMul", ["X", "W"], ["Y"], name="matmul")
+    return _build_single_node_model(
+        "matmul_model",
+        node,
+        [1, 10],
+        [1, 5],
+        [numpy_helper.from_array(weights, name="W")],
+    )
