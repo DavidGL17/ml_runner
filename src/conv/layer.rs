@@ -1,6 +1,6 @@
 //! The `Conv2DLayer` type itself: fields and declared shapes only. The
-//! forward pass lives in a sibling module - `scalar.rs` by default, or
-//! `simd.rs` with the `simd` Cargo feature - see `conv/mod.rs`.
+//! forward pass lives in `gemm.rs`, shared by every Cargo feature - see
+//! `conv/mod.rs`.
 
 use crate::tensor::TensorShape;
 use serde::{Deserialize, Serialize};

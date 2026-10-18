@@ -4,7 +4,7 @@
 //! `simd` Cargo feature is enabled. Input validation is shared and lives in
 //! `MaxPool2DLayer::validate` (`maxpool/layer.rs`).
 //!
-//! Strategy (same as the width kernel in `conv/simd.rs`): vectorise across
+//! Strategy: vectorise across
 //! *output width*. If padding is needed the input is copied once into a
 //! buffer padded with `-inf` - not zero - so padded cells can never win a
 //! max, matching the scalar backend's "skip out-of-bounds cells" rule

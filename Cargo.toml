@@ -1,6 +1,6 @@
 [package]
 name = "ml_runner"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2024"
 license-file = "LICENSE"
 description = "A Rust crate for running machine learning models, with optional SIMD and BLAS support."
