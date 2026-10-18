@@ -19,6 +19,17 @@
       "sync": true,
       "skip_python": false,
       "skip_rust": false
+    },
+    {
+      "name": "pi3",
+      "host": "pi3",
+      "dir": "/home/david/ml-runner",
+      "python": "python3",
+      "rust_dir": ".",
+      "features": null,
+      "sync": true,
+      "skip_python": false,
+      "skip_rust": false
     }
   ]
 }

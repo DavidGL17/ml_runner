@@ -96,6 +96,7 @@ See [benchmark.md](benchmark.md)
 
 ## Supported layers
 
+Need a layer that is not yet supported ? Please open an issue describing your need.
 
 ### Supported layers in python library
 
@@ -172,9 +173,7 @@ See [benchmark.md](benchmark.md)
 These are the next features that I would like to implement, in no specific order
 
 - [ ] Add activation functions support in simd
-- [ ] Add support for more layer types
 - [ ] Add support to other optimization backends (cuda, ...)
-- [ ] Export both the python library and rust library to pip/crates.io for easier usage
 - [ ] Add support for non float models (right now only float is supported, we should allow export and run of models in int)
 - [ ] Implement parser for pytorch and tensorflow models
   - I will focus mainly on tensorflow support at first, since pytorch has a good onnx exporter

@@ -11,13 +11,21 @@ It will run the following models. All of them except RNNoiseLike are small class
 |  [ResNet18Cifar](#results-for-model--resnet18cifar)  |  Residual CNN   |        3x32x32         |  ~15.4 M   | Conv2d (3x3, 1x1, 4x4), BatchNorm2d, residual add, ReLU, Linear |
 | [LSTMClassifier](#results-for-model--lstmclassifier) |    Recurrent    | 20 steps x 64 features |   ~233 K   | 2-layer LSTM, Linear, multiple onnx layers                      |
 |    [AlexNetLite](#results-for-model--alexnetlite)    |  Mid-size CNN   |        3x64x64         |  ~1.03 M   | Conv2d (7x7, 5x5, 3x3), MaxPool2d, Linear, ReLU                 |
-|               [SqueezeNetLite](#squeezenetlite)               |  Compact CNN    |        3x64x64         |   ~123 K   | Conv2d (3x3, 1x1), MaxPool2d, Concat, AvgPool2d, ReLU           |
-|                [GRUClassifier](#gruclassifier)                |    Recurrent    | 20 steps x 64 features |   ~175 K   | 2-layer GRU, Linear, Softmax                                    |
-|           [ElmanRNNClassifier](#elmanrnnclassifier)           |    Recurrent    | 50 steps x 32 features |   ~55 K    | 2-layer RNN (tanh), Linear                                      |
-|                  [RNNoiseLike](#rnnoiselike)                  | Audio denoising |  1 frame x 42 features |   ~88 K    | GRU, Concat, Reshape, Linear, Tanh, Sigmoid                     |
-|                     [GatedMLP](#gatedmlp)                     | Fully connected |          512           |  ~5.26 M   | Linear, Sigmoid, elementwise Mul                                |
+|          [SqueezeNetLite](#squeezenetlite)           |   Compact CNN   |        3x64x64         |   ~123 K   | Conv2d (3x3, 1x1), MaxPool2d, Concat, AvgPool2d, ReLU           |
+|           [GRUClassifier](#gruclassifier)            |    Recurrent    | 20 steps x 64 features |   ~175 K   | 2-layer GRU, Linear, Softmax                                    |
+|      [ElmanRNNClassifier](#elmanrnnclassifier)       |    Recurrent    | 50 steps x 32 features |   ~55 K    | 2-layer RNN (tanh), Linear                                      |
+|             [RNNoiseLike](#rnnoiselike)              | Audio denoising | 1 frame x 42 features  |   ~88 K    | GRU, Concat, Reshape, Linear, Tanh, Sigmoid                     |
+|                [GatedMLP](#gatedmlp)                 | Fully connected |          512           |  ~5.26 M   | Linear, Sigmoid, elementwise Mul                                |
 
 For more details on the models, see [the model chapter](#model-descriptions).
+
+The results were obtained on the following machines, labelled `local`, `pi4` and `pi3` in the results:
+
+|  Device  | Hardware                    | CPU                                                       | RAM  | OS                                                       | PyTorch threads |
+| :------: | :-------------------------- | :-------------------------------------------------------- | :--: | :------------------------------------------------------- | :-------------: |
+| `local`  | Desktop PC                  | Intel Core i5-10400 (x86_64, 6 cores / 12 threads, 2.9 GHz, AVX2) | 16 GB | Ubuntu 22.04 under WSL2 (Windows)                         |        6        |
+|  `pi4`   | Raspberry Pi 4 Model B      | Broadcom BCM2711, 4x Cortex-A72 (aarch64, 1.8 GHz, NEON)  | 4 GB | Raspberry Pi OS 64-bit (Debian 12 bookworm)              |        4        |
+|  `pi3`   | Raspberry Pi 3 Model B+     | Broadcom BCM2837B0, 4x Cortex-A53 (aarch64, in-order, 1.4 GHz, NEON) | 1 GB | Raspberry Pi OS 64-bit (Debian 11 bullseye)              |        4        |
 
 ## Results
 
