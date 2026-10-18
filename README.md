@@ -21,6 +21,8 @@ Cargo package : [ml-runner](https://crates.io/crates/ml_runner)
 
 ![speedup results](img/benchmark_rust_speedup.png)
 
+See the [benchmark chapter](#benchmarks) for more details.
+
 ## Features
 
 - A python library to parse ML models into an exported json format. Exports from : 
