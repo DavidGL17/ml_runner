@@ -21,6 +21,10 @@ exclude = [
     "**.json",
     "Cargo.lock",
     "benchmark_results",
+    "Claude.md",
+    ".gitignore",
+    ".gitattributes",
+    "benchmark.md"
 ]
 
 [dependencies]
