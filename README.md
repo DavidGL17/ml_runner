@@ -19,7 +19,7 @@ Cargo package : [ml-runner](https://crates.io/crates/ml_runner)
 
 ### Current state of performance of the library
 
-![speedup results](img/benchmark_rust_speedup.png)
+![benchmark summary](img/benchmark_summary.png)
 
 See the [benchmark chapter](#benchmarks) for more details.
 

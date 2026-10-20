@@ -21,15 +21,15 @@ For more details on the models, see [the model chapter](#model-descriptions).
 
 The results were obtained on the following machines, labelled `local`, `pi4` and `pi3` in the results:
 
-|  Device  | Hardware                    | CPU                                                       | RAM  | OS                                                       | PyTorch threads |
-| :------: | :-------------------------- | :-------------------------------------------------------- | :--: | :------------------------------------------------------- | :-------------: |
-| `local`  | Desktop PC                  | Intel Core i5-10400 (x86_64, 6 cores / 12 threads, 2.9 GHz, AVX2) | 16 GB | Ubuntu 22.04 under WSL2 (Windows)                         |        6        |
-|  `pi4`   | Raspberry Pi 4 Model B      | Broadcom BCM2711, 4x Cortex-A72 (aarch64, 1.8 GHz, NEON)  | 4 GB | Raspberry Pi OS 64-bit (Debian 12 bookworm)              |        4        |
-|  `pi3`   | Raspberry Pi 3 Model B+     | Broadcom BCM2837B0, 4x Cortex-A53 (aarch64, in-order, 1.4 GHz, NEON) | 1 GB | Raspberry Pi OS 64-bit (Debian 11 bullseye)              |        4        |
+| Device  | Hardware                | CPU                                                                  |  RAM  | OS                                          | PyTorch threads |
+| :-----: | :---------------------- | :------------------------------------------------------------------- | :---: | :------------------------------------------ | :-------------: |
+| `local` | Desktop PC              | Intel Core i5-10400 (x86_64, 6 cores / 12 threads, 2.9 GHz, AVX2)    | 16 GB | Ubuntu 22.04 under WSL2 (Windows)           |        6        |
+|  `pi4`  | Raspberry Pi 4 Model B  | Broadcom BCM2711, 4x Cortex-A72 (aarch64, 1.8 GHz, NEON)             | 4 GB  | Raspberry Pi OS 64-bit (Debian 12 bookworm) |        4        |
+|  `pi3`  | Raspberry Pi 3 Model B+ | Broadcom BCM2837B0, 4x Cortex-A53 (aarch64, in-order, 1.4 GHz, NEON) | 1 GB  | Raspberry Pi OS 64-bit (Debian 11 bullseye) |        4        |
 
 ## Results
 
-Detailed results per version can be found in the [benchmark_results](benchmark_results/) folder. Results for latest unpublished version are still work in progress.
+Detailed results per version (of the rust package) can be found in the [benchmark_results](benchmark_results/) folder. Results for latest unpublished version are still work in progress.
 
 ### Overall results
 
