@@ -63,34 +63,57 @@ impl Conv2DLayer {
     /// Unrolls a `(C_in, H, W)` input (row-major) into the column matrix:
     /// row `(ic * k + kh) * k + kw`, column `oh * out_w + ow` holds the
     /// input pixel that kernel tap multiplies for that output pixel.
+    ///
+    /// Every element is written exactly once, in order: for each tap the
+    /// range of output columns that lands inside the input is worked out
+    /// up front (`tap_range`), so only the borders are zero-filled and the
+    /// in-bounds stretch is a straight copy when `stride == 1`.
     fn im2col(&self, input: &[f32], out_h: usize, out_w: usize) -> Array2<f32> {
         let k = self.kernel_size;
-        let (in_h, in_w) = (self.height as isize, self.width as isize);
-        let (stride, pad) = (self.stride as isize, self.padding as isize);
+        let (stride, pad) = (self.stride, self.padding);
+        let rows = self.input_channels * k * k;
         let n = out_h * out_w;
 
-        let mut cols = Array2::<f32>::zeros((self.input_channels * k * k, n));
-        for (row, mut dst) in cols.axis_iter_mut(Axis(0)).enumerate() {
-            let (ic, kh, kw) = (row / (k * k), (row / k % k) as isize, (row % k) as isize);
+        let mut cols = Vec::with_capacity(rows * n);
+        for ic in 0..self.input_channels {
             let plane = &input[ic * self.height * self.width..(ic + 1) * self.height * self.width];
-            let dst = dst.as_slice_mut().expect("rows of a standard-layout Array2 are contiguous");
+            for kh in 0..k {
+                let (oh_lo, oh_hi) = tap_range(kh, pad, stride, self.height, out_h);
+                for kw in 0..k {
+                    let (ow_lo, ow_hi) = tap_range(kw, pad, stride, self.width, out_w);
 
-            for oh in 0..out_h {
-                let ih = oh as isize * stride + kh - pad;
-                if ih < 0 || ih >= in_h {
-                    continue; // whole output row reads padding: stays zero
-                }
-                let src_row = &plane[ih as usize * self.width..(ih as usize + 1) * self.width];
-                for (ow, d) in dst[oh * out_w..(oh + 1) * out_w].iter_mut().enumerate() {
-                    let iw = ow as isize * stride + kw - pad;
-                    if iw >= 0 && iw < in_w {
-                        *d = src_row[iw as usize];
+                    // Output rows whose input row is padding: all zeros.
+                    cols.resize(cols.len() + oh_lo * out_w, 0.0);
+                    for oh in oh_lo..oh_hi {
+                        let ih = oh * stride + kh - pad;
+                        let src_row = &plane[ih * self.width..(ih + 1) * self.width];
+                        let iw_lo = ow_lo * stride + kw - pad;
+
+                        cols.resize(cols.len() + ow_lo, 0.0);
+                        if stride == 1 {
+                            cols.extend_from_slice(&src_row[iw_lo..iw_lo + (ow_hi - ow_lo)]);
+                        } else {
+                            cols.extend(src_row[iw_lo..].iter().step_by(stride).take(ow_hi - ow_lo));
+                        }
+                        cols.resize(cols.len() + (out_w - ow_hi), 0.0);
                     }
+                    cols.resize(cols.len() + (out_h - oh_hi) * out_w, 0.0);
                 }
             }
         }
-        cols
+        Array2::from_shape_vec((rows, n), cols).expect("im2col fills exactly rows * n elements")
     }
+}
+
+/// For kernel tap `t` along one axis, the range `lo..hi` of output
+/// positions `o` whose input index `o * stride + t - pad` falls inside
+/// `0..in_len`. Empty (`lo == hi`) when the tap only ever reads padding.
+fn tap_range(t: usize, pad: usize, stride: usize, in_len: usize, out_len: usize) -> (usize, usize) {
+    // o * stride + t >= pad  <=>  o >= ceil((pad - t) / stride)
+    let lo = pad.saturating_sub(t).div_ceil(stride).min(out_len);
+    // o * stride + t < in_len + pad  <=>  o < ceil((in_len + pad - t) / stride)
+    let hi = (in_len + pad).saturating_sub(t).div_ceil(stride).min(out_len);
+    (lo, hi.max(lo))
 }
 
 #[cfg(test)]
@@ -158,6 +181,8 @@ mod tests {
             (5, 1, 2, 2, 3, 6, 4),
             (2, 2, 0, 3, 3, 9, 7),
             (3, 3, 2, 1, 2, 10, 11),
+            (1, 1, 1, 2, 3, 4, 5),
+            (2, 3, 1, 2, 2, 9, 10),
         ];
         for (seed, &(k, stride, padding, in_c, out_c, h, w)) in cases.iter().enumerate() {
             let layer = Conv2DLayer {
