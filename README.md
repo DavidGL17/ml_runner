@@ -172,6 +172,7 @@ Need a layer that is not yet supported ? Please open an issue describing your ne
 
 These are the next features that I would like to implement, in no specific order
 
+- [ ] Support multiple output layers and models
 - [ ] Add activation functions support in simd
 - [ ] Add support to other optimization backends (cuda, ...)
 - [ ] Add support for non float models (right now only float is supported, we should allow export and run of models in int)
